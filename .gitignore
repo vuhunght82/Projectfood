@@ -1,0 +1,24 @@
+# Bỏ qua cơ sở dữ liệu SQLite (để không ghi đè dữ liệu VPS)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Thư mục thư viện Node
+node_modules/
+
+# File nhật ký / Log
+*.log
+npm-debug.log*
+
+# File cấu hình môi trường chứa mật khẩu
+.env
+
+# Thư mục cấu hình IDE / VS Code
+.vscode/
+.idea/
+
+# File tạm hệ điều hành
+Thumbs.db
+.DS_Store
