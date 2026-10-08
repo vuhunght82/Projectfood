@@ -701,19 +701,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/sw.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'sw.js')));
 
 // Hỗ trợ tải giao diện cài đặt hệ thống ở mọi định dạng URL (tránh lỗi fetch 404 / connection refused)
-app.get([
-    '/system-settings', 
-    '/system_settings', 
-    '/system settings', 
-    '/views/system-settings.html', 
-    '/views/system_settings.html'
-], (req, res) => {
-    // Nếu request yêu cầu file HTML hoặc fetch partial view
-    if (req.xhr || req.headers.accept?.includes('text/html') || req.path.includes('/views/')) {
-        return res.sendFile(path.join(__dirname, 'views', 'system-settings.html'));
-    }
-    // Nếu là người dùng truy cập trực tiếp từ thanh địa chỉ trình duyệt, trả về index.html (SPA)
-    res.sendFile(path.join(__dirname, 'index.html'));
+// Hỗ trợ tải giao diện cài đặt hệ thống ở mọi định dạng URL (tránh lỗi fetch 404 / connection refused)
+// Chỉ khi nào code front-end yêu cầu đường dẫn /views/... thì mới trả về file giao diện con
+app.get(['/views/system-settings.html', '/views/system_settings.html'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'system-settings.html'));
 });
 // ==========================================
 // 3. KẾT NỐI REALTIME SOCKET.IO & QUẢN LÝ PHIÊN
@@ -2846,7 +2837,7 @@ app.get('/api/push/public-key', (req, res) => {
 // ==========================================
 // 10. SPA CATCH-ALL ROUTE & SERVER LISTEN
 // ==========================================
-app.get(['/', '/orders', '/cart', '/categories', '/menu', '/menu-cards', '/users', '/payments', '/shipper', '/system-settings', '/kitchen', '/ready-orders', '/tables', '/members', '/membership', '/tra-cuu-thanh-vien'], (req, res) => {
+app.get(['/', '/orders', '/cart', '/categories', '/menu', '/menu-cards', '/users', '/payments', '/shipper', '/system-settings', '/system_settings', '/system settings', '/kitchen', '/ready-orders', '/tables', '/members', '/membership', '/tra-cuu-thanh-vien'], (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
