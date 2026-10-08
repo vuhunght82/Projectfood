@@ -1,0 +1,609 @@
+<style>
+.table-floorplan-box {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 4px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
+    transition: all 0.2s ease;
+}
+.table-floorplan-box:hover {
+    border-color: #cbd5e1;
+    background: #fafbfc;
+}
+.table-floorplan-mini {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
+}
+.table-svg-diagram {
+    user-select: none;
+    overflow: visible;
+}
+.chair-item {
+    transition: transform 0.15s ease, filter 0.15s ease;
+    transform-origin: center;
+}
+.chair-item:hover {
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+}
+</style>
+
+<div class="container-fluid py-3">
+    <!-- TIÊU ĐỀ & THANH ĐIỀU HƯỚNG TAB PHÒNG BÀN -->
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h4 class="text-success fw-bold m-0 fs-5">
+                <i class="fa-solid fa-table-cells me-2"></i>Sơ Đồ Phòng Bàn Thời Gian Thực
+            </h4>
+            <div class="text-muted small">Theo dõi vị trí, số ghế, trạng thái phục vụ và quản lý lượng khách</div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- Nút Chuyển Bố Cục Sơ Đồ Ngang / Dọc (Màu tương phản cao, không trùng màu xanh) -->
+            <div class="btn-group btn-group-sm p-1 rounded-pill bg-light border shadow-sm" role="group" id="tableLayoutToggleGroup">
+                <button type="button" class="btn btn-sm btn-dark rounded-pill fw-bold px-3 shadow-none" id="btnLayoutHorizontal" onclick="window.switchTableLayout('HORIZONTAL')" title="Hiển thị dạng thẻ lưới ngang">
+                    <i class="fa-solid fa-table-cells me-1"></i> Sơ Đồ Ngang
+                </button>
+                <button type="button" class="btn btn-sm btn-light text-secondary rounded-pill fw-bold px-3 border-0 shadow-none" id="btnLayoutVertical" onclick="window.switchTableLayout('VERTICAL')" title="Hiển thị dạng danh sách cột dọc">
+                    <i class="fa-solid fa-list me-1"></i> Sơ Đồ Dọc
+                </button>
+            </div>
+
+            <!-- Nút Thêm Bàn Mới (Chỉ hiện khi có quyền TABLES_MANAGE) -->
+            <button type="button" class="btn btn-sm btn-success fw-bold rounded-pill px-3 shadow-sm d-none" id="btnAddTableTopBtn" onclick="window.openAddTableModal()">
+                <i class="fa-solid fa-plus me-1"></i> Thêm Bàn
+            </button>
+
+            <!-- Nút Làm Mới -->
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold" onclick="window.loadTables()">
+                <i class="fa-solid fa-rotate me-1"></i> Làm Mới
+            </button>
+        </div>
+    </div>
+
+    <!-- 4 THẺ CHỈ SỐ NHANH VỀ PHÒNG BÀN & LƯỢNG KHÁCH -->
+    <div class="row g-2 mb-3">
+        <!-- Bàn Trống -->
+        <div class="col-lg-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-success h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-secondary small fw-bold text-uppercase">Bàn Trống Sẵn Sàng</div>
+                        <div class="fs-3 fw-bold text-success" id="kpiEmptyTablesCount">0</div>
+                        <div class="text-muted small" style="font-size: 11px;">Đón khách mới</div>
+                    </div>
+                    <div class="rounded-circle bg-success bg-opacity-10 p-3 text-success">
+                        <i class="fa-solid fa-circle-check fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bàn Đang Phục Vụ -->
+        <div class="col-lg-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-warning h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-secondary small fw-bold text-uppercase">Bàn Đang Phục Vụ</div>
+                        <div class="fs-3 fw-bold text-warning" id="kpiOccupiedTablesCount">0</div>
+                        <div class="text-muted small" style="font-size: 11px;" id="kpiUnpaidTablesSubtext">Có khách ngồi dùng bữa</div>
+                    </div>
+                    <div class="rounded-circle bg-warning bg-opacity-10 p-3 text-warning">
+                        <i class="fa-solid fa-utensils fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Khách Đang Ngồi -->
+        <div class="col-lg-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-primary h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-secondary small fw-bold text-uppercase">Khách Đang Có Mặt</div>
+                        <div class="fs-3 fw-bold text-primary" id="kpiCurrentGuestsCount">0</div>
+                        <div class="text-muted small" style="font-size: 11px;">Tổng số khách hiện tại</div>
+                    </div>
+                    <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary">
+                        <i class="fa-solid fa-users fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tỷ Lệ Lấp Đầy Ghế -->
+        <div class="col-lg-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-info h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-secondary small fw-bold text-uppercase">Tỷ Lệ Lấp Đầy Ghế</div>
+                        <div class="fs-3 fw-bold text-info" id="kpiOccupancyRate">0%</div>
+                        <div class="text-muted small" style="font-size: 11px;" id="kpiCapacitySubtext">Trên tổng số 0 ghế</div>
+                    </div>
+                    <div class="rounded-circle bg-info bg-opacity-10 p-3 text-info">
+                        <i class="fa-solid fa-chair fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- THANH TABS CHÍNH & BỘ LỌC KHU VỰC -->
+    <div class="card shadow-sm border-0 rounded-3 mb-3 bg-white p-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <!-- 3 Tabs Con -->
+            <ul class="nav nav-pills" id="tablesMainTabs">
+                <li class="nav-item me-2">
+                    <button class="nav-link active rounded-pill fw-bold" id="tab-map-btn" type="button" onclick="window.switchTablesSubTab('tab-map')">
+                        <i class="fa-solid fa-table-cells me-1"></i> Sơ Đồ Bàn
+                    </button>
+                </li>
+                <li class="nav-item me-2" id="tab-guest-stats-item">
+                    <button class="nav-link rounded-pill fw-bold" id="tab-guest-stats-btn" type="button" onclick="window.switchTablesSubTab('tab-guest-stats')">
+                        <i class="fa-solid fa-chart-line me-1"></i> Thống Kê Lượng Khách
+                    </button>
+                </li>
+                <li class="nav-item d-none" id="tab-manage-item">
+                    <button class="nav-link rounded-pill fw-bold d-none" id="tab-manage-btn" type="button" onclick="window.switchTablesSubTab('tab-manage')">
+                        <i class="fa-solid fa-gear me-1"></i> Quản Lý Danh Sách Bàn
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Bộ Lọc Khu Vực / Tầng (Chỉ hiện khi ở tab Sơ Đồ Bàn) -->
+            <div id="tableAreaFilterContainer" class="d-flex align-items-center gap-1 flex-wrap">
+                <span class="small fw-bold text-secondary me-1"><i class="fa-solid fa-filter me-1"></i>Khu vực:</span>
+                <button type="button" class="btn btn-sm btn-success rounded-pill px-3 active fw-bold area-filter-btn" data-area="ALL" onclick="window.filterTablesByArea('ALL')">Tất Cả</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold area-filter-btn" data-area="Tầng 1" onclick="window.filterTablesByArea('Tầng 1')">Tầng 1</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold area-filter-btn" data-area="Tầng 2" onclick="window.filterTablesByArea('Tầng 2')">Tầng 2</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold area-filter-btn" data-area="Sân Vườn" onclick="window.filterTablesByArea('Sân Vườn')">Sân Vườn</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold area-filter-btn" data-area="Phòng VIP" onclick="window.filterTablesByArea('Phòng VIP')">Phòng VIP</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NỘI DUNG 3 TABS -->
+    <div id="tablesTabsContent">
+        
+        <!-- ========================================== -->
+        <!-- TAB 1: SƠ ĐỒ PHÒNG BÀN (MAP)               -->
+        <!-- ========================================== -->
+        <div class="tab-pane-tables" id="tab-map">
+            <!-- KHU VỰC THẺ BÀN ĂN (HORIZONTAL GRID HOẶC VERTICAL LIST) -->
+            <div id="tablesContainer" class="row g-3 row-cols-xl-4 row-cols-lg-3 row-cols-md-2 row-cols-1">
+                <div class="col-12 text-center py-5 text-muted">
+                    <i class="fa-solid fa-circle-notch fa-spin fa-2x text-success mb-2"></i>
+                    <div>Đang tải sơ đồ phòng bàn...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: THỐNG KÊ LƯỢNG KHÁCH THEO THỜI GIAN -->
+        <!-- ========================================== -->
+        <div class="tab-pane-tables d-none" id="tab-guest-stats">
+            <div class="card shadow-sm border-0 rounded-3 mb-3 bg-white p-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 border-bottom pb-2">
+                    <h6 class="fw-bold text-success m-0">
+                        <i class="fa-solid fa-chart-column me-2"></i>Báo Cáo Phân Tích Lượng Khách & Giờ Cao Điểm
+                    </h6>
+                    <!-- Bộ lọc thời gian -->
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-success active" id="btnGuestToday" onclick="window.filterGuestStats('TODAY')">Hôm nay</button>
+                            <button type="button" class="btn btn-outline-success" id="btnGuestWeek" onclick="window.filterGuestStats('WEEK')">7 ngày qua</button>
+                            <button type="button" class="btn btn-outline-success" id="btnGuestMonth" onclick="window.filterGuestStats('MONTH')">Tháng này</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4 Chỉ số Lượng Khách -->
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3 col-6">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <small class="text-secondary fw-bold text-uppercase">Tổng Lượt Khách Trong Kỳ</small>
+                            <div class="fs-3 fw-bold text-primary" id="statTotalGuests">0</div>
+                            <small class="text-muted">Tổng số lượt người đến quán</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <small class="text-secondary fw-bold text-uppercase">Khung Giờ Cao Điểm Nhất</small>
+                            <div class="fs-4 fw-bold text-warning text-truncate" id="statPeakHour">Đang tính...</div>
+                            <small class="text-muted">Giờ tập trung đông khách nhất</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <small class="text-secondary fw-bold text-uppercase">Chi Tiêu Bình Quân / Khách</small>
+                            <div class="fs-3 fw-bold text-success" id="statAvgSpend">0 đ</div>
+                            <small class="text-muted">Doanh thu / lượt khách</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <small class="text-secondary fw-bold text-uppercase">Tổng Số Đơn Đã Phục Vụ</small>
+                            <div class="fs-3 fw-bold text-dark" id="statTotalOrders">0</div>
+                            <small class="text-muted">Số bàn đã hoàn thành phục vụ</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Biểu đồ phân bố lượng khách 24 khung giờ -->
+                <div class="border rounded-3 p-3 bg-light">
+                    <div class="fw-bold text-dark mb-2">
+                        <i class="fa-solid fa-clock me-1 text-primary"></i>Phân Bố Lượng Khách Theo 24 Khung Giờ Trong Ngày
+                    </div>
+                    <div style="height: 280px; position: relative;">
+                        <canvas id="guestHourlyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 3: QUẢN LÝ DANH SÁCH BÀN GHẾ (ADMIN)   -->
+        <!-- ========================================== -->
+        <div class="tab-pane-tables d-none" id="tab-manage">
+            <div class="card shadow-sm border-0 rounded-3 bg-white p-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-dark m-0">
+                        <i class="fa-solid fa-list-check me-2 text-success"></i>Danh Sách Cấu Hình Bàn Ghế Nhà Hàng
+                    </h6>
+                    <button type="button" class="btn btn-sm btn-success fw-bold rounded-pill px-3 shadow-sm" onclick="window.openAddTableModal()">
+                        <i class="fa-solid fa-plus me-1"></i> Thêm Bàn Mới
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 80px;">Mã Bàn</th>
+                                <th>Tên Bàn</th>
+                                <th>Khu Vực / Tầng</th>
+                                <th class="text-center">Số Ghế Thiết Kế</th>
+                                <th class="text-center">Thứ Tự</th>
+                                <th class="text-center" style="width: 140px;">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablesManageTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">Đang tải danh sách bàn...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 1: ĐỔI BÀN / CHUYỂN BÀN              -->
+<!-- ========================================== -->
+<div class="modal fade" id="transferTableModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-warning text-dark py-3">
+                <h5 class="modal-title fw-bold">
+                    <i class="fa-solid fa-shuffle me-2"></i>Chuyển Đơn Hàng Sang Bàn Mới
+                </h5>
+                <button type="button" class="btn-close" aria-label="Close" onclick="window.closeTableModal('transferTableModal')"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-info border-0 shadow-sm small mb-3">
+                    <i class="fa-solid fa-info-circle me-1"></i>
+                    Toàn bộ món ăn, số tiền và số khách đang ngồi sẽ được chuyển sang bàn đích. Bàn hiện tại sẽ trở về trạng thái trống.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary">Bàn Hiện Tại (Đang Phục Vụ):</label>
+                    <input type="text" class="form-control fw-bold bg-light" id="transferFromTableName" readonly>
+                    <input type="hidden" id="transferFromTableId">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-success">Chọn Bàn Chuyển Đến (Bàn Trống):</label>
+                    <select class="form-select form-select-lg fw-bold text-success" id="transferToTableSelect">
+                        <option value="">-- Chọn bàn trống --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" onclick="window.closeTableModal('transferTableModal')">Hủy</button>
+                <button type="button" class="btn btn-warning fw-bold rounded-pill px-4 shadow-sm" onclick="window.confirmTransferTable()">
+                    <i class="fa-solid fa-check me-1"></i> Xác Nhận Đổi Bàn
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 2: THÊM / SỬA BÀN GHẾ                -->
+<!-- ========================================== -->
+<div class="modal fade" id="tableEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold" id="tableEditModalTitle">
+                    <i class="fa-solid fa-chair me-2"></i>Thêm Bàn Mới
+                </h5>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="window.closeTableModal('tableEditModal')"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="editTableId">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary">Mã Bàn (Viết liền, không dấu):</label>
+                    <input type="text" class="form-control" id="editTableCode" placeholder="VD: B01, VIP01...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary">Tên Bàn (Hiển thị):</label>
+                    <input type="text" class="form-control fw-bold" id="editTableName" placeholder="VD: Bàn 01, Phòng VIP 1...">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-secondary">Khu Vực / Tầng:</label>
+                        <select class="form-select" id="editTableArea">
+                            <option value="Tầng 1">Tầng 1</option>
+                            <option value="Tầng 2">Tầng 2</option>
+                            <option value="Sân Vườn">Sân Vườn</option>
+                            <option value="Phòng VIP">Phòng VIP</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-secondary">Số Ghế Tối Đa:</label>
+                        <input type="number" class="form-control text-center fw-bold" id="editTableCapacity" value="4" min="1" max="50">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary">Thứ Tự Sắp Xếp (Sort Order):</label>
+                    <input type="number" class="form-control text-center" id="editTableSortOrder" value="1" min="0">
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" onclick="window.closeTableModal('tableEditModal')">Đóng</button>
+                <button type="button" class="btn btn-success fw-bold rounded-pill px-4 shadow-sm" onclick="window.saveTableInfo()">
+                    <i class="fa-solid fa-floppy-disk me-1"></i> Lưu Thông Tin Bàn
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 3: MỞ BÀN / NHẬP SỐ KHÁCH VÀO BÀN     -->
+<!-- ========================================== -->
+<div class="modal fade" id="openTableModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold fs-6">
+                    <i class="fa-solid fa-user-plus me-2"></i>Mở Bàn Đón Khách
+                </h5>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="window.closeTableModal('openTableModal')"></button>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <h5 class="fw-bold text-success mb-3" id="openModalTableName">BÀN 01</h5>
+                <label class="form-label small fw-bold text-secondary mb-2">Số lượng khách ngồi bàn:</label>
+                
+                <div class="d-flex justify-content-center align-items-center gap-3 mb-3">
+                    <button type="button" class="btn btn-outline-danger btn-lg rounded-circle" style="width: 45px; height: 45px;" onclick="window.stepOpenGuest(-1)">
+                        <i class="fa-solid fa-minus"></i>
+                    </button>
+                    <span class="fs-1 fw-bold text-primary px-3" id="openModalGuestDisplay">2</span>
+                    <button type="button" class="btn btn-outline-success btn-lg rounded-circle" style="width: 45px; height: 45px;" onclick="window.stepOpenGuest(1)">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+                <input type="hidden" id="openModalTableId">
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary rounded-pill px-3" onclick="window.closeTableModal('openTableModal')">Đóng</button>
+                <button type="button" class="btn btn-success fw-bold rounded-pill px-3 shadow-sm py-2 flex-grow-1 ms-2" onclick="window.confirmOpenTableAndOrder()">
+                    <i class="fa-solid fa-utensils me-1"></i> Bắt Đầu Chọn Món
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 4: THANH TOÁN BÀN TRỰC TIẾP          -->
+<!-- ========================================== -->
+<div class="modal fade" id="tablePaymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-danger text-white py-3">
+                <h5 class="modal-title fw-bold">
+                    <i class="fa-solid fa-credit-card me-2"></i>Thanh Toán Hóa Đơn Bàn
+                </h5>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="window.closeTableModal('tablePaymentModal')"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="payTableId">
+                <input type="hidden" id="payOrderIdentifier">
+
+                <!-- Tên bàn & Số tiền -->
+                <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded-3 border mb-3">
+                    <div>
+                        <h5 class="fw-bold text-dark m-0" id="payTableName">Bàn 01</h5>
+                        <small class="text-muted" id="payOrderCodeDisplay">Mã đơn: #CHAY-001</small>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-secondary fw-bold d-block">TỔNG TẠM TÍNH:</small>
+                        <span class="fs-4 fw-bold text-dark" id="paySubtotalDisplay">0 đ</span>
+                    </div>
+                </div>
+
+                <!-- TÍCH ĐIỂM & THẺ THÀNH VIÊN HOA SEN -->
+                <div class="mb-3 p-3 bg-light rounded-3 border">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-bold text-success m-0">
+                            <i class="fa-solid fa-id-card me-1"></i> Thẻ Thành Viên / Tích Điểm:
+                        </label>
+                    </div>
+                    <div class="input-group input-group-sm mb-2" id="tablePayMemberInputGroup">
+                        <input type="tel" id="tablePayMemberPhone" class="form-control" placeholder="Nhập SĐT hoặc quét mã QR thẻ..." onkeydown="if(event.key==='Enter') window.tablePayLookupMember()">
+                        <button class="btn btn-outline-success fw-bold px-2" type="button" onclick="window.cartOpenQrScannerModal('tablePayMemberPhone')" title="Quét mã QR thẻ thành viên">
+                            <i class="fa-solid fa-qrcode me-1"></i> Quét QR
+                        </button>
+                        <button class="btn btn-success fw-bold" type="button" onclick="window.tablePayLookupMember()">
+                            <i class="fa-solid fa-magnifying-glass me-1"></i> Áp Dụng
+                        </button>
+                    </div>
+                    <div id="tablePayMemberAppliedArea" style="display: none;"></div>
+                </div>
+
+                <!-- BẢNG TỔNG KẾT TIỀN THỰC THU -->
+                <div class="p-2 px-3 bg-white rounded-3 border mb-3 small">
+                    <div class="d-flex justify-content-between text-danger mb-1" id="tablePayDiscountRow" style="display: none;">
+                        <span id="tablePayDiscountLabel">Giảm giá thành viên:</span>
+                        <span id="tablePayDiscountAmount" class="fw-bold">-0 đ</span>
+                    </div>
+                    <div class="d-flex justify-content-between text-warning text-dark mb-1" id="tablePayPointsRow" style="display: none;">
+                        <span id="tablePayPointsLabel">Trừ điểm thưởng:</span>
+                        <span id="tablePayPointsAmount" class="fw-bold text-danger">-0 đ</span>
+                    </div>
+                    <div class="d-flex justify-content-between text-primary mb-1" id="tablePayPrepaidRow" style="display: none;">
+                        <span>Trừ từ Ví Trả Trước:</span>
+                        <span id="tablePayPrepaidAmount" class="fw-bold text-danger">-0 đ</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center border-top pt-2">
+                        <span class="fw-bold text-dark fs-6">SỐ TIỀN CẦN THU:</span>
+                        <span class="fs-3 fw-bold text-danger" id="payAmountDisplay">0 đ</span>
+                    </div>
+                    <div id="tablePayPointsEarnNotice" class="text-end text-success mt-1 small" style="font-size: 11px;"></div>
+                </div>
+
+                <!-- Phương thức thanh toán -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary">Chọn Phương Thức Thanh Toán:</label>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <input type="radio" class="btn-check" name="tablePayMethod" id="tablePayMethodCash" value="CASH" checked onchange="window.handleTablePayMethodChange('CASH')">
+                            <label class="btn btn-outline-success w-100 py-2 fw-bold d-flex flex-column align-items-center justify-content-center gap-1" for="tablePayMethodCash" style="font-size: 12px;">
+                                <i class="fa-solid fa-money-bill-wave fs-5"></i> Tiền Mặt
+                            </label>
+                        </div>
+                        <div class="col-4">
+                            <input type="radio" class="btn-check" name="tablePayMethod" id="tablePayMethodQR" value="BANK_TRANSFER" onchange="window.handleTablePayMethodChange('BANK_TRANSFER')">
+                            <label class="btn btn-outline-primary w-100 py-2 fw-bold d-flex flex-column align-items-center justify-content-center gap-1" for="tablePayMethodQR" style="font-size: 12px;">
+                                <i class="fa-solid fa-qrcode fs-5"></i> Quét QR
+                            </label>
+                        </div>
+                        <div class="col-4">
+                            <input type="radio" class="btn-check" name="tablePayMethod" id="tablePayMethodPrepaid" value="PREPAID" onchange="window.handleTablePayMethodChange('PREPAID')">
+                            <label class="btn btn-outline-secondary w-100 py-2 fw-bold d-flex flex-column align-items-center justify-content-center gap-1" for="tablePayMethodPrepaid" style="font-size: 12px;">
+                                <i class="fa-solid fa-wallet fs-5"></i> Ví Trả Trước
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vùng hiển thị mã VietQR nếu chọn Chuyển khoản -->
+                <div id="tablePayQrArea" class="text-center p-3 bg-light rounded-3 border mb-3" style="display: none;">
+                    <div class="fw-bold text-primary mb-2"><i class="fa-solid fa-qrcode me-1"></i>Quét mã VietQR để thanh toán</div>
+                    <img id="tablePayQrImage" src="" alt="VietQR" class="img-fluid rounded border shadow-sm mx-auto d-block" style="max-width: 180px; max-height: 180px;">
+                    <div class="small text-muted mt-2" id="tablePayBankInfo">Đang nạp thông tin ngân hàng...</div>
+                </div>
+
+                <!-- Thông tin người thu tiền -->
+                <div class="p-2 bg-light rounded border d-flex justify-content-between align-items-center">
+                    <small class="text-muted"><i class="fa-solid fa-user-check me-1"></i>Nhân viên thu tiền:</small>
+                    <small class="fw-bold text-dark" id="tablePayStaffName">Nhân viên</small>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" onclick="window.closeTableModal('tablePaymentModal')">Đóng</button>
+                <button type="button" class="btn btn-danger fw-bold rounded-pill px-4 shadow-sm" onclick="window.confirmTablePayment()">
+                    <i class="fa-solid fa-circle-check me-1"></i> Xác Nhận Đã Thu Tiền
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 5: PHIẾU TẠM TÍNH (XEM DANH SÁCH MÓN)-->
+<!-- ========================================== -->
+<div class="modal fade" id="tablePreBillModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-info text-white py-3">
+                <h5 class="modal-title fw-bold" id="tablePreBillTitle">
+                    <i class="fa-solid fa-receipt me-2"></i>Phiếu Tạm Tính - Danh Sách Món Tại Bàn
+                </h5>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="window.closeTableModal('tablePreBillModal')"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Thông tin bàn, mã đơn, giờ vào -->
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-6 col-12">
+                            <h4 class="fw-bold text-dark m-0" id="preBillTableName">Bàn 01</h4>
+                            <div class="small text-muted mt-1" id="preBillAreaCapacity">Khu vực: Tầng 1 | Sức chứa: 4 ghế</div>
+                        </div>
+                        <div class="col-md-6 col-12 text-md-end">
+                            <div class="badge bg-primary fs-6 px-3 py-1" id="preBillOrderCode">#CHAY-001</div>
+                            <div class="small text-muted mt-1" id="preBillTime">Giờ vào: --:--:--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bảng danh sách món ăn đang có tại bàn -->
+                <div class="table-responsive border rounded-3 mb-3" style="max-height: 280px; overflow-y: auto;">
+                    <table class="table table-hover align-middle m-0">
+                        <thead class="table-light sticky-top" style="z-index: 2;">
+                            <tr class="small text-secondary text-uppercase" style="font-size: 11px;">
+                                <th style="width: 40px;" class="text-center">#</th>
+                                <th>Tên Món Ăn & Topping</th>
+                                <th class="text-center" style="width: 70px;">SL</th>
+                                <th class="text-end" style="width: 120px;">Đơn Giá</th>
+                                <th class="text-end" style="width: 130px;">Thành Tiền</th>
+                            </tr>
+                        </thead>
+                        <tbody id="preBillItemsTbody">
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    <i class="fa-solid fa-spinner fa-spin me-1"></i> Đang nạp danh sách món...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Tổng kết tiền & Trạng thái thanh toán -->
+                <div class="p-3 bg-light rounded-3 border d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <span class="small fw-bold text-secondary me-2">Trạng thái thanh toán:</span>
+                        <span id="preBillPayStatusBadge" class="badge bg-danger">CHƯA THANH TOÁN</span>
+                    </div>
+                    <div class="text-end">
+                        <span class="fs-6 fw-bold text-secondary me-2">TỔNG TẠM TÍNH:</span>
+                        <span class="fs-3 fw-bold text-danger" id="preBillTotalAmount">0 đ</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-primary fw-bold rounded-pill px-3 shadow-sm" onclick="window.printPreBillFromModal()">
+                    <i class="fa-solid fa-print me-1"></i> In Phiếu Tạm Tính
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-success fw-bold rounded-pill px-3 shadow-sm" onclick="window.goToMenuFromPreBill()">
+                        <i class="fa-solid fa-plus me-1"></i> Gọi Thêm Món
+                    </button>
+                    <button type="button" class="btn btn-secondary rounded-pill px-3" onclick="window.closeTableModal('tablePreBillModal')">Đóng</button>
+                    <button type="button" class="btn btn-danger fw-bold rounded-pill px-3 shadow-sm" id="preBillPayBtn" onclick="window.payFromPreBillModal()">
+                        <i class="fa-solid fa-credit-card me-1"></i> Thu Tiền Bàn Này
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+

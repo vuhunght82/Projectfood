@@ -1,0 +1,25 @@
+Đúng rồi bạn, project này đang chạy một máy chủ local (Local Server)
+ tại địa chỉ http://localhost:3000 bằng môi trường Node.js và công cụ Nodemon.   Khi copy thư mục project sang máy mới, thư mục node_modules (chứa các thư viện) thường không được copy theo hoặc không tương thích OS. Để Terminal máy mới chạy mượt mà dòng lệnh npm run dev như hình, bạn thực hiện đúng các bước sau: 
+ 1.Tải và cài đặt Node.js trên máy mới:Bắt buộc để chạy được lệnh npm và node.Truy cập trang chủ nodejs.org và tải bản LTS (Khuyên dùng).Cài đặt bình thường (bấm Next cho đến khi hoàn thành).
+
+2.Mở Terminal tại thư mục Project:Đường dẫn đến thư mục chứa mã nguồn.Copy thư mục project (ví dụ C:\Users\Hung\Project Food) vào máy mới.Mở thư mục project, click vào thanh địa chỉ trên cùng của Windows Explorer, gõ cmd rồi bấm Enter để mở Terminal ngay tại thư mục đó.
+
+3.Cài đặt lại các thư viện phụ thuộc (node_modules):Cần thiết khi chuyển sang máy mới.Tại cửa sổ Terminal vừa mở, gõ lệnh sau rồi bấm Enter:Bashnpm install
+(Hệ thống sẽ tự động đọc file package.json và tải đầy đủ các thư viện như express, better-sqlite3, nodemon... về máy mới).
+
+4.Cài đặt Nodemon toàn cục (Hoặc chạy trực tiếp):Công cụ tự động reload server khi sửa code.Để lệnh npm run dev gọi được nodemon chuẩn xác như trong ảnh, bạn chạy lệnh cài nodemon:Bashnpm install -g nodemon
+
+5.Khởi chạy Server Local:Bắt đầu chạy máy chủ.Bây giờ bạn gõ lệnh quen thuộc để khởi động máy chủ:Bashnpm run dev
+Khi màn hình báo dòng chữ xanh: Server Quán Chay đang chạy tại: http://localhost:3000 là bạn đã cài đặt máy chủ local thành công!
+
+
+taskkill /F /IM node.exe
+giai phong node đang chạy
+
+
+npm install web-push
+cai thu vien de do chuong khi dien thoai tat man hinh
+
+
+cap quyen de vao duoc bang dien thoai
+netsh advfirewall firewall add rule name="NodeJS Port 3000" dir=in action=allow protocol=TCP localport=3000

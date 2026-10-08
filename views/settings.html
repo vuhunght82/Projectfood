@@ -1,0 +1,188 @@
+<div class="container-fluid py-3">
+    <!-- Thanh Chuyển Tab Cài Đặt Nhanh Dạng Ngang cho Mobile -->
+    <ul class="nav nav-pills menu-category-scroll mb-3" id="settingsTab" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active rounded-pill fw-bold" id="bill-tab" data-bs-toggle="tab" data-bs-target="#bill-setting" type="button">
+                <i class="fa-solid fa-receipt me-1"></i> Mẫu Bill & Máy In
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold" id="payment-tab" data-bs-toggle="tab" data-bs-target="#payment-setting" type="button">
+                <i class="fa-solid fa-qrcode me-1"></i> Thanh Toán QR
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-bold" id="sound-tab" data-bs-toggle="tab" data-bs-target="#sound-setting" type="button">
+                <i class="fa-solid fa-volume-high me-1"></i> Âm Thanh Bếp
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="settingsTabContent">
+        <!-- ================= TAB 1: CẤU HÌNH MÁY IN & THIẾT KẾ BILL ================= -->
+        <div class="tab-pane fade show active" id="bill-setting">
+            <div class="row g-3">
+                <!-- Cột Form Cấu Hình Bill & Chọn Máy In -->
+                <div class="col-lg-7 col-md-6">
+                    <div class="card shadow-sm border-0 rounded-3">
+                        <div class="card-header bg-success text-white py-3 rounded-top-3">
+                            <h6 class="m-0 fw-bold"><i class="fa-solid fa-sliders me-2"></i>Cấu Hình Mẫu In Hóa Đơn & Máy In</h6>
+                        </div>
+                        <div class="card-body p-3">
+                            <form id="systemSettingsForm" onsubmit="saveSystemSettings(event)">
+                                <!-- 1. Chọn Máy In & Khổ Giấy -->
+                                <div class="p-3 bg-light rounded-3 mb-3 border">
+                                    <h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-print me-1"></i> Thiết Lập Máy In</h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-7">
+                                            <label class="form-label small fw-bold text-secondary">Máy in mặc định</label>
+                                            <select class="form-select form-select-sm" id="printerSelect">
+                                                <option value="BROWSER">Máy in Trình Duyệt / System Dialog (Khuyên dùng)</option>
+                                                <option value="POS80">Máy in Nhiệt 80mm (K80 - Cổng USB/LAN)</option>
+                                                <option value="POS58">Máy in Nhiệt 58mm (K58 - Cổng Bluetooth)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="form-label small fw-bold text-secondary">Khổ giấy in</label>
+                                            <select class="form-select form-select-sm" id="paperSizeSelect" onchange="updateBillPreview()">
+                                                <option value="80mm">K80 (80mm - Tiêu chuẩn)</option>
+                                                <option value="58mm">K58 (58mm - Khổ nhỏ)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 2. Nội Dung Header Bill -->
+                                <h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-heading me-1"></i> Thông Tin Tiêu Đề Bill</h6>
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold text-secondary">Tên Nhà Hàng</label>
+                                    <input type="text" class="form-control form-control-sm" id="restaurantNameInput" value="NHÀ HÀNG CHAY HOA SEN" oninput="updateBillPreview()" required>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold text-secondary">Địa chỉ</label>
+                                    <input type="text" class="form-control form-control-sm" id="restaurantAddressInput" value="36 Phạm Văn Sáng, Bà Điểm, Hóc Môn, TP.HCM" oninput="updateBillPreview()">
+                                </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">Số điện thoại / Hotline</label>
+                                        <input type="text" class="form-control form-control-sm" id="restaurantPhoneInput" value="0901 234 567" oninput="updateBillPreview()">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-secondary">Khẩu hiệu / Wifi Pass</label>
+                                        <input type="text" class="form-control form-control-sm" id="restaurantWifiInput" value="Wifi: ChayHoaSen / Pass: 88888888" oninput="updateBillPreview()">
+                                    </div>
+                                </div>
+
+                                <!-- 3. Lời Cảm Ơn / Chân Trang Bill -->
+                                <h6 class="fw-bold text-success mb-2"><i class="fa-solid fa-comment-dots me-1"></i> Chân Trang Hóa Đơn (Footer)</h6>
+                                <div class="mb-3">
+                                    <textarea class="form-control form-control-sm" id="billFooterInput" rows="2" oninput="updateBillPreview()">Kính chúc Quý Khách An Lạc & An Nhiên!
+Xin cảm ơn & Hẹn gặp lại Quý Khách!</textarea>
+                                </div>
+
+                                <button type="submit" class="btn btn-success w-100 fw-bold py-2 shadow-sm">
+                                    <i class="fa-solid fa-floppy-disk me-1"></i> LƯU CẤU HÌNH HỆ THỐNG
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cột Xem Trước Hóa Đơn Thời Gian Thực (Live Bill Preview) -->
+                <div class="col-lg-5 col-md-6">
+                    <div class="card shadow-sm border-0 rounded-3">
+                        <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="m-0 fw-bold"><i class="fa-solid fa-eye me-2"></i>Xem Trước Hóa Đơn In</h6>
+                            <button class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="printTestBill()">
+                                <i class="fa-solid fa-print me-1"></i> In Thử
+                            </button>
+                        </div>
+                        <div class="card-body p-3 bg-secondary bg-opacity-10 d-flex justify-content-center">
+                            <!-- Khung Giấy Bill Mô Phỏng -->
+                            <div id="billPreviewContainer" class="bg-white p-3 shadow-sm border text-dark" style="width: 300px; font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4;">
+                                <div class="text-center fw-bold fs-6 mb-1" id="previewResName">NHÀ HÀNG CHAY HOA SEN</div>
+                                <div class="text-center small" id="previewResAddr">36 Phạm Văn Sáng, Hóc Môn</div>
+                                <div class="text-center small mb-1" id="previewResPhone">ĐT: 0901 234 567</div>
+                                <div class="text-center small italic mb-2" id="previewResWifi">Wifi: ChayHoaSen</div>
+                                <div class="border-top border-bottom border-dark py-1 my-2 text-center fw-bold">HOÁ ĐƠN THANH TOÁN</div>
+                                
+                                <div class="d-flex justify-content-between small"><span>Số đơn: #HD1008</span><span>Bàn: 05</span></div>
+                                <div class="d-flex justify-content-between small mb-2"><span>Ngày: 21/09/2026</span><span>Thu ngân: Vũ</span></div>
+
+                                <table class="w-100 my-2 small border-top border-bottom border-dark py-1">
+                                    <thead>
+                                        <tr class="border-bottom">
+                                            <th class="text-start py-1">Món</th>
+                                            <th class="text-center">SL</th>
+                                            <th class="text-end">Tiền</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="py-1">Lẩu Chay Thanh Đạm</td><td class="text-center">1</td><td class="text-end">150.000</td></tr>
+                                        <tr><td class="py-1">Chả Giò Hoa Sen</td><td class="text-center">2</td><td class="text-end">70.000</td></tr>
+                                        <tr><td class="py-1">Trà Đào Sả Tắc</td><td class="text-center">2</td><td class="text-end">60.000</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <div class="d-flex justify-content-between fw-bold fs-6 my-2">
+                                    <span>TỔNG CỘNG:</span>
+                                    <span>280.000 đ</span>
+                                </div>
+
+                                <div class="border-top border-dark pt-2 text-center small text-break" id="previewFooter">
+                                    Kính chúc Quý Khách An Lạc!<br>Xin cảm ơn & Hẹn gặp lại!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 2: CẤU HÌNH THANH TOÁN QR ================= -->
+        <div class="tab-pane fade" id="payment-setting">
+            <div class="card shadow-sm border-0 rounded-3 col-lg-8 mx-auto">
+                <div class="card-header bg-success text-white py-3">
+                    <h6 class="m-0 fw-bold"><i class="fa-solid fa-qrcode me-2"></i>Cấu Hình Mã QR Thanh Toán Ngân Hàng (VietQR)</h6>
+                </div>
+                <div class="card-body p-3">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-secondary">Ngân hàng</label>
+                            <select class="form-select form-select-sm" id="bankNameSelect">
+                                <option value="MBBank">MBBank (Ngân Hàng Quân Đội)</option>
+                                <option value="Vietcombank">Vietcombank</option>
+                                <option value="Techcombank">Techcombank</option>
+                                <option value="ACB">ACB</option>
+                                <option value="BIDV">BIDV</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-secondary">Số Tài Khoản</label>
+                            <input type="text" class="form-control form-control-sm" id="bankAccountInput" value="0901234567" placeholder="Nhập số tài khoản">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold text-secondary">Tên Chủ Tài Khoản (Viết hoa không dấu)</label>
+                            <input type="text" class="form-control form-control-sm" id="bankOwnerInput" value="CONG TY HOANG PHUC GLASS" placeholder="VD: NGUYEN VAN A">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 3: CẤU HÌNH ÂM THANH BẾP ================= -->
+        <div class="tab-pane fade" id="sound-setting">
+            <div class="card shadow-sm border-0 rounded-3 col-lg-8 mx-auto">
+                <div class="card-header bg-success text-white py-3">
+                    <h6 class="m-0 fw-bold"><i class="fa-solid fa-volume-high me-2"></i>Âm Thanh Thông Báo Bếp KDS</h6>
+                </div>
+                <div class="card-body p-3 text-center">
+                    <p class="text-muted small">Bấm nút bên dưới để thử chuông báo khi có đơn hàng mới từ điện thoại gửi xuống Bếp:</p>
+                    <button class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm me-2" onclick="playKitchenBellTest()">
+                        <i class="fa-solid fa-bell me-1"></i> Bấm Thử Chuông Bếp (Ting Ting)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,150 @@
+<div class="row g-4">
+    <!-- CỘT TRÁI: FORM THÊM / SỬA MÓN -->
+    <div class="col-lg-4 col-md-5">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-success text-white py-3 rounded-top-3 d-flex justify-content-between align-items-center">
+                <h5 class="m-0 fw-bold fs-6" id="formTitle"><i class="fa-solid fa-utensils me-2"></i>Thêm Món Ăn Mới</h5>
+                <button type="button" class="btn btn-sm btn-light d-none" id="btnCancelEdit" onclick="cancelEditMode()">Hủy sửa</button>
+            </div>
+            <div class="card-body p-3">
+                <form id="addMenuForm" enctype="multipart/form-data">
+                    <!-- Field ẩn chứa ID khi ở chế độ Sửa -->
+                    <input type="hidden" name="Item_id" id="itemIdInput">
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Danh mục (Category_id) <span class="text-danger">*</span></label>
+                        <select id="itemCategorySelect" name="Category_id" class="form-select form-select-sm" required>
+                            <option value="">-- Đang tải danh mục... --</option>
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Mã món <span class="text-danger">*</span></label>
+                            <input type="text" name="Item_code" id="itemCodeInput" class="form-control form-control-sm" placeholder="VD: DT01" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Tên món chay <span class="text-danger">*</span></label>
+                            <input type="text" name="Item_name" id="itemNameInput" class="form-control form-control-sm" placeholder="VD: Phở Bò Chay" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Giá bán (VNĐ) <span class="text-danger">*</span></label>
+                            <input type="number" name="Base_price" id="itemPriceInput" class="form-control form-control-sm" value="45000" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Giá vốn (VNĐ)</label>
+                            <input type="number" name="Cost_price" id="itemCostInput" class="form-control form-control-sm" value="0">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Trạng thái</label>
+                            <select name="Is_available" id="itemAvailableSelect" class="form-select form-select-sm">
+                                <option value="1">Còn món (1)</option>
+                                <option value="0">Hết món (0)</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Máy in bếp</label>
+                            <select name="Printer_target" id="itemPrinterSelect" class="form-select form-select-sm">
+                                <option value="KITCHEN_MAIN">Bếp Chính</option>
+                                <option value="BAR">Pha Chế / Bar</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-secondary">Tải ảnh từ máy tính (File):</label>
+                        <input type="file" name="image" class="form-control form-control-sm" accept="image/*">
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-secondary">Hoặc nhập Link ảnh (URL):</label>
+                        <input type="text" name="Image_url" id="itemImgUrlInput" class="form-control form-control-sm" placeholder="https://...">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Mô tả ngắn (Description)</label>
+                        <textarea name="Description" id="itemDescInput" class="form-control form-control-sm" rows="2" placeholder="Nước dùng nấm đậm đà..."></textarea>
+                    </div>
+
+                    <!-- KHU VỰC QUẢN LÝ TOPPING ĐI KÈM -->
+                    <div class="mb-3 p-2 border rounded-3 bg-light">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label small fw-bold text-success m-0">
+                                <i class="fa-solid fa-layer-group me-1"></i> Topping / Tùy Chọn Đi Kèm
+                            </label>
+                            <button type="button" class="btn btn-sm btn-outline-success py-0 px-2 rounded-pill fw-bold" style="font-size: 11px;" onclick="window.addToppingRow()">
+                                <i class="fa-solid fa-plus me-1"></i> Thêm Topping
+                            </button>
+                        </div>
+                        <div id="toppingListContainer" class="d-flex flex-column gap-1" style="max-height: 160px; overflow-y: auto;">
+                            <!-- Dòng topping sẽ được sinh ra ở đây -->
+                        </div>
+                        <input type="hidden" name="Toppings" id="itemToppingsJson" value="[]">
+                    </div>
+
+                    <button type="submit" id="btnSubmitForm" class="btn btn-success w-100 fw-bold py-2 shadow-sm">
+                        <i class="fa-solid fa-plus me-1"></i> Lưu Món Ăn
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- CỘT PHẢI: BẢNG DANH SÁCH MÓN ĂN & BỘ LỌC TÌM KIẾM -->
+    <div class="col-lg-8 col-md-7">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-white py-3 border-bottom-0">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                        <h5 class="m-0 text-success fw-bold fs-6"><i class="fa-solid fa-book-open me-2"></i>Danh Sách Thực Đơn</h5>
+                    </div>
+                    <!-- Ô LỌC THEO DANH MỤC -->
+                    <div class="col-md-3">
+                        <select id="filterCategorySelect" class="form-select form-select-sm" onchange="filterTableMenu()">
+                            <option value="all">Tất cả danh mục</option>
+                        </select>
+                    </div>
+                    <!-- Ô TÌM KIẾM TÊN / MÃ MÓN -->
+                    <div class="col-md-3">
+                        <input type="text" id="filterSearchInput" class="form-control form-control-sm" placeholder="Tìm tên/mã món..." onkeyup="filterTableMenu()">
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <button class="btn btn-sm btn-outline-success rounded-pill w-100" onclick="loadMenuItemsTable()"><i class="fa-solid fa-rotate me-1"></i> Làm mới</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="menuTable">
+                        <thead class="table-light text-secondary small">
+                            <tr>
+                                <th class="text-center" style="width: 50px;">Hình</th>
+                                <th>Mã Món</th>
+                                <th>Tên Món Chay</th>
+                                <th class="text-end">Giá Bán</th>
+                                <th class="text-end">Giá Vốn</th>
+                                <th>Mô Tả</th>
+                                <th class="text-center">Trạng Thái</th>
+                                <th class="text-center" style="width: 110px;">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="menuTableBody">
+                            <tr>
+                                <td colspan="8" class="text-center py-5 text-muted">
+                                    <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                                    Đang tải dữ liệu thực đơn...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

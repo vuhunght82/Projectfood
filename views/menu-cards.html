@@ -1,0 +1,93 @@
+<!-- BẮT BỘC: Nhúng CSS định dạng thẻ ngang & bóng đổ -->
+<link rel="stylesheet" href="/css/menu-cards.css">
+
+<div class="card shadow-sm border-0 rounded-3">
+    <div class="card-header bg-white py-3 border-bottom-0">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h4 class="m-0 text-success fw-bold fs-5">
+                <i class="fa-solid fa-utensils me-2"></i>Thực Đơn Nhà Hàng
+            </h4>
+            <div class="d-flex gap-2 align-items-center">
+                <input type="text" id="cardSearchInput" class="form-control form-control-sm" placeholder="Tìm món ăn..." onkeyup="filterMenuCards()" style="width: 200px;">
+                <button class="btn btn-sm btn-outline-success rounded-pill px-3" onclick="loadMenuCardsData()">
+                    <i class="fa-solid fa-rotate me-1"></i> Làm mới
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- BANNER BỐI CẢNH ĐƠN HÀNG: ĂN TẠI BÀN HOẶC ĐƠN GIAO HÀNG -->
+    <div id="orderContextBannerContainer" class="px-3 pt-1">
+        <!-- Render động từ delivery-orders.js -->
+    </div>
+
+    <div class="card-body p-3 pt-1">
+        <!-- Thanh Tab Danh Mục -->
+        <div id="categoryTabs">
+            <!-- Render động các nút danh mục từ JS -->
+        </div>
+
+        <!-- Lưới Thẻ Món Ăn Ngang -->
+        <div id="menuCardsGrid">
+            <!-- Render danh sách thẻ món ăn dạng ngang từ JS -->
+        </div>
+    </div>
+</div>
+
+<!-- MODAL TÙY CHỌN MÓN & TOPPING -->
+<div id="dishOptionsModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2100; justify-content:center; align-items:center;">
+    <div class="card shadow-lg" style="width:100%; max-width:440px; background:#fff; border-radius:12px; margin:15px; overflow:hidden; border:none;">
+        <div class="card-header bg-success text-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="m-0 fw-bold fs-6" id="modalDishTitle"><i class="fa-solid fa-utensils me-2"></i>Tùy Chọn Món</h5>
+            <button type="button" class="btn-close btn-close-white" onclick="window.closeDishOptionsModal()"></button>
+        </div>
+        <div class="card-body p-3">
+            <div class="d-flex align-items-center gap-3 mb-3 p-2 bg-light rounded-3">
+                <img id="modalDishImg" src="/uploads/dish-sample.jpg" alt="" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">
+                <div>
+                    <h6 class="fw-bold mb-1" id="modalDishName">Tên món</h6>
+                    <div class="text-success fw-bold fs-6" id="modalDishBasePrice">0 đ</div>
+                </div>
+            </div>
+
+            <!-- DANH SÁCH TOPPING -->
+            <div id="modalToppingSection" class="mb-3">
+                <label class="form-label small fw-bold text-success mb-2">
+                    <i class="fa-solid fa-layer-group me-1"></i> Chọn Topping thêm (tùy chọn):
+                </label>
+                <div id="modalToppingList" class="d-flex flex-column gap-1" style="max-height: 180px; overflow-y: auto;">
+                    <!-- JS render checkboxes -->
+                </div>
+            </div>
+
+            <!-- GHI CHÚ RIÊNG CHO MÓN -->
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-secondary mb-1">
+                    <i class="fa-solid fa-comment-dots me-1"></i> Ghi chú riêng cho món này:
+                </label>
+                <input type="text" id="modalDishNote" class="form-control form-control-sm" placeholder="VD: Ít cay, không đường, nhiều rau...">
+            </div>
+
+            <!-- SỐ LƯỢNG & TỔNG TIỀN -->
+            <div class="d-flex justify-content-between align-items-center mb-3 pt-2 border-top">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small fw-bold text-secondary">Số lượng:</span>
+                    <div class="input-group input-group-sm" style="width: 105px;">
+                        <button class="btn btn-outline-secondary px-2" type="button" onclick="window.changeModalQty(-1)">-</button>
+                        <input type="text" id="modalDishQty" class="form-control text-center px-1 fw-bold" value="1" readonly>
+                        <button class="btn btn-outline-secondary px-2" type="button" onclick="window.changeModalQty(1)">+</button>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <div class="small text-muted">Thành tiền:</div>
+                    <div class="fw-bold text-success fs-5" id="modalDishTotalPrice">0 đ</div>
+                </div>
+            </div>
+
+            <!-- NÚT XÁC NHẬN -->
+            <button type="button" class="btn btn-success w-100 fw-bold py-2 rounded-pill shadow-sm" onclick="window.confirmAddToCartWithOptions()">
+                <i class="fa-solid fa-cart-plus me-1"></i> Thêm Vào Giỏ Hàng
+            </button>
+        </div>
+    </div>
+</div>

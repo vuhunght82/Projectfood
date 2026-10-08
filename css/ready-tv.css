@@ -1,0 +1,404 @@
+/* ========================================================
+   READY TV & PROMOTIONAL BANNER STYLES (SMART TV READY)
+   ======================================================== */
+
+:root {
+    --tv-primary: #2e7d32;
+    --tv-accent: #ff9800;
+    --tv-bg-card: #ffffff;
+    --transition-speed: 800ms;
+}
+
+/* 1. KHUNG CHỨA BANNER QUẢNG CÁO ĐA VỊ TRÍ */
+.ready-banner-wrapper {
+    position: relative;
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    margin-bottom: 16px;
+    border: 1px solid rgba(46, 125, 50, 0.15);
+}
+
+.ready-banner-slides {
+    position: relative;
+    width: 100%;
+    min-height: 180px;
+    overflow: hidden;
+}
+
+.ready-banner-slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-speed) ease, transform var(--transition-speed) ease;
+    z-index: 1;
+}
+
+.ready-banner-slide.active {
+    opacity: 1;
+    visibility: visible;
+    position: relative;
+    z-index: 2;
+}
+
+/* 2. HIỆU ỨNG CHUYỂN SLIDE (FADE, SLIDE, ZOOM, FLIP) */
+/* Fade */
+.effect-fade .ready-banner-slide {
+    transform: scale(0.98);
+}
+.effect-fade .ready-banner-slide.active {
+    transform: scale(1);
+}
+
+/* Slide (Trượt ngang) */
+.effect-slide .ready-banner-slide {
+    transform: translateX(30px);
+}
+.effect-slide .ready-banner-slide.active {
+    transform: translateX(0);
+}
+
+/* Zoom (Phóng to) */
+.effect-zoom .ready-banner-slide {
+    transform: scale(1.08);
+}
+.effect-zoom .ready-banner-slide.active {
+    transform: scale(1);
+}
+
+/* Flip 3D (Lật) */
+.effect-flip .ready-banner-slides {
+    perspective: 1200px;
+}
+.effect-flip .ready-banner-slide {
+    transform: rotateY(25deg);
+}
+.effect-flip .ready-banner-slide.active {
+    transform: rotateY(0deg);
+}
+
+/* 3. BỐ CỤC THẺ PROMO NGANG (TOP & BOTTOM) */
+.promo-card-horizontal {
+    display: flex;
+    align-items: center;
+    min-height: 180px;
+    background: linear-gradient(135deg, #ffffff 0%, #f7fdf8 100%);
+}
+
+.promo-card-horizontal .promo-image-box {
+    position: relative;
+    width: 280px;
+    height: 180px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.promo-card-horizontal .promo-image-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.6s ease;
+}
+
+.promo-card-horizontal:hover .promo-image-box img {
+    transform: scale(1.05);
+}
+
+.promo-card-horizontal .promo-info-box {
+    padding: 20px 28px;
+    flex-grow: 1;
+}
+
+/* 4. BỐ CỤC THẺ PROMO DỌC (LEFT & RIGHT) */
+.promo-card-vertical {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    min-height: 380px;
+}
+
+.promo-card-vertical .promo-image-box {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    overflow: hidden;
+}
+
+.promo-card-vertical .promo-image-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.promo-card-vertical .promo-info-box {
+    padding: 16px 20px;
+}
+
+/* 5. TYPOGRAPHY & HUY HIỆU KHUYẾN MẠI */
+.promo-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: linear-gradient(135deg, #e53935 0%, #d81b60 100%);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 20px;
+    box-shadow: 0 4px 10px rgba(229, 57, 53, 0.4);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.promo-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: #1b5e20;
+    margin: 0 0 6px 0;
+    line-height: 1.3;
+}
+
+.promo-subtitle {
+    font-size: 14.5px;
+    color: #4b5563;
+    margin: 0 0 10px 0;
+    line-height: 1.5;
+}
+
+.promo-price {
+    display: inline-block;
+    font-size: 20px;
+    font-weight: 800;
+    color: #d32f2f;
+    background: #ffebee;
+    padding: 4px 14px;
+    border-radius: 8px;
+    border: 1px solid #ffcdd2;
+}
+
+/* 6. NÚT ĐIỀU HƯỚNG VÀ CHẤM CHUYỂN SLIDE */
+.ready-banner-controls {
+    position: absolute;
+    bottom: 10px;
+    right: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(4px);
+    padding: 4px 10px;
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.btn-banner-prev, .btn-banner-next {
+    background: transparent;
+    border: none;
+    color: #2e7d32;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 6px;
+    border-radius: 50%;
+    transition: background 0.2s;
+}
+
+.btn-banner-prev:hover, .btn-banner-next:hover {
+    background: #e8f5e9;
+}
+
+.ready-banner-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.banner-dot {
+    width: 8px;
+    height: 8px;
+    background: #ccc;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.banner-dot.active {
+    background: #2e7d32;
+    width: 18px;
+    border-radius: 10px;
+}
+
+/* 7. TOÀN MÀN HÌNH QUẢNG CÁO (SMART TV FULLSCREEN SCREENSAVER) */
+#readyFullscreenScreensaver {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #06240d 0%, #0d3817 50%, #041a09 100%);
+    z-index: 99999;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.screensaver-showcase-card {
+    display: flex;
+    max-width: 1200px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(10px);
+}
+
+.screensaver-img-wrapper {
+    position: relative;
+    width: 55%;
+    min-height: 480px;
+    overflow: hidden;
+}
+
+.screensaver-food-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: slowZoom 12s infinite alternate ease-in-out;
+}
+
+@keyframes slowZoom {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.08); }
+}
+
+.screensaver-badge {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    background: linear-gradient(135deg, #e53935, #b71c1c);
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 800;
+    padding: 8px 20px;
+    border-radius: 30px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    text-transform: uppercase;
+}
+
+.screensaver-info-wrapper {
+    width: 45%;
+    padding: 45px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.screensaver-brand {
+    font-size: 16px;
+    font-weight: 700;
+    color: #2e7d32;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+}
+
+.screensaver-clock {
+    color: #666;
+    font-weight: normal;
+    font-size: 15px;
+}
+
+.screensaver-title {
+    font-size: 36px;
+    font-weight: 900;
+    color: #111827;
+    margin: 0 0 16px 0;
+    line-height: 1.25;
+}
+
+.screensaver-subtitle {
+    font-size: 18px;
+    color: #4b5563;
+    margin: 0 0 24px 0;
+    line-height: 1.6;
+}
+
+.screensaver-price {
+    font-size: 32px;
+    font-weight: 900;
+    color: #d32f2f;
+    background: #ffebee;
+    display: inline-block;
+    align-self: flex-start;
+    padding: 8px 24px;
+    border-radius: 12px;
+    border: 2px solid #ffcdd2;
+    margin-bottom: 24px;
+}
+
+.screensaver-hint {
+    background: #fff8e1;
+    border-left: 4px solid #ffa000;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13.5px;
+    color: #795548;
+    margin-top: auto;
+}
+
+/* Nút thoát Screensaver */
+.screensaver-exit-btn {
+    position: absolute;
+    top: 25px;
+    right: 30px;
+    background: rgba(0, 0, 0, 0.4);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 30px;
+    padding: 8px 18px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.screensaver-exit-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+/* 8. RESPONSIVE DÀNH CHO SMART TV VÀ MÀN HÌNH NHỎ */
+@media (max-width: 991px) {
+    .promo-card-horizontal {
+        flex-direction: column;
+    }
+    .promo-card-horizontal .promo-image-box {
+        width: 100%;
+        height: 160px;
+    }
+    .screensaver-showcase-card {
+        flex-direction: column;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .screensaver-img-wrapper {
+        width: 100%;
+        min-height: 250px;
+        height: 250px;
+    }
+    .screensaver-info-wrapper {
+        width: 100%;
+        padding: 20px;
+    }
+    .screensaver-title {
+        font-size: 24px;
+    }
+}
+

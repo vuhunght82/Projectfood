@@ -1,0 +1,65 @@
+<div class="card">
+    <div class="card-header">
+        <h3 id="paymentFormTitle"><i class="fa-solid fa-wallet"></i> Thêm Phương Thức Thanh Toán</h3>
+        <button class="btn btn-outline btn-sm" id="btnCancelEditPayment" style="display: none;" onclick="resetPaymentForm()">
+            <i class="fa-solid fa-xmark"></i> Hủy Sửa
+        </button>
+    </div>
+
+    <!-- FORM THÊM / SỬA -->
+    <form id="paymentForm" onsubmit="handlePaymentSubmit(event)" style="margin-bottom: 25px;">
+        <input type="hidden" id="editPaymentId" value="">
+        
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Mã Phương Thức <span class="required">*</span>:</label>
+                <input type="text" id="inputPaymentCode" required placeholder="VD: CASH, BANK_TRANSFER, MOMO, CARD">
+            </div>
+            
+            <div class="form-group">
+                <label>Tên Hiển Thị <span class="required">*</span>:</label>
+                <input type="text" id="inputPaymentName" required placeholder="VD: Chuyển Khoản Ngân Hàng QR">
+            </div>
+
+            <div class="form-group">
+                <label>Trạng Thái:</label>
+                <select id="selectPaymentStatus">
+                    <option value="1">Đang hoạt động</option>
+                    <option value="0">Tạm ngưng</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group mb-12">
+            <label>Hướng Dẫn / Mẫu Mã QR Thanh Toán:</label>
+            <textarea id="inputPaymentGuide" rows="2" placeholder="Nhập số tài khoản ngân hàng hoặc hướng dẫn thanh toán..."></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="btnSavePayment">
+            <i class="fa-solid fa-floppy-disk"></i> Lưu Phương Thức
+        </button>
+    </form>
+
+    <div class="card-header">
+        <h3><i class="fa-solid fa-list-check"></i> Danh Sách Phương Thức Thanh Toán</h3>
+        <button class="btn btn-outline" onclick="loadPayments()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
+    </div>
+
+    <!-- BẢNG DANH SÁCH -->
+    <div class="overflow-x">
+        <table>
+            <thead>
+                <tr>
+                    <th>Mã</th>
+                    <th>Tên Phương Thức</th>
+                    <th>Hướng Dẫn</th>
+                    <th class="text-center">Trạng Thái</th>
+                    <th class="text-center">Thao Tác</th>
+                </tr>
+            </thead>
+            <tbody id="paymentsListTable">
+                <!-- Render bang JS -->
+            </tbody>
+        </table>
+    </div>
+</div>

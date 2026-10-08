@@ -1,0 +1,1007 @@
+<!-- ======================================================== -->
+<!-- GIAO DIỆN QUẢN LÝ THẺ THÀNH VIÊN - NHÀ HÀNG CHAY HOA SEN   -->
+<!-- ======================================================== -->
+<div class="container-fluid px-3 py-2">
+    <!-- TIÊU ĐỀ & THANH CÔNG CỤ TRÊN CÙNG -->
+    <div class="card shadow-sm border-0 rounded-4 mb-3" style="background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 60%, #388e3c 100%); color: white;">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center shadow" style="width: 58px; height: 58px; background: rgba(255,255,255,0.2); font-size: 28px;">
+                        🪷
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <h3 class="fw-bold m-0 text-white">Thẻ Thành Viên Chay Hoa Sen</h3>
+                            <span class="badge bg-warning text-dark fw-bold px-2 py-1 shadow-sm" style="font-size: 12px;">HỘI VIÊN THANH TỊNH</span>
+                        </div>
+                        <p class="text-white-50 m-0 small mt-1">
+                            Gắn kết dài hạn, tích lũy điểm thưởng, ưu đãi ngày Rằm/Mùng Một & chăm sóc khách quen
+                        </p>
+                    </div>
+                </div>
+
+                <!-- BANNER ÂM LỊCH & NÚT THAO TÁC NHANH -->
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div id="memberLunarStatusBanner" class="p-2 px-3 rounded-pill bg-white text-dark d-flex align-items-center gap-2 shadow-sm" style="font-size: 12.5px;">
+                        <i class="fa-solid fa-moon text-primary"></i>
+                        <span id="memberLunarText" class="fw-bold text-success">Đang tính âm lịch...</span>
+                        <span id="memberLunarX2Badge" class="badge bg-danger text-white rounded-pill px-2 py-1" style="display: none;">x2 ĐIỂM HÔM NAY</span>
+                    </div>
+
+                    <button class="btn btn-outline-light fw-bold text-white rounded-pill px-3 shadow-sm border" onclick="window.cartOpenQrScannerModal('lookupPhoneInput')" title="Quét mã QR trên thẻ thành viên của khách">
+                        <i class="fa-solid fa-qrcode me-1"></i> Quét Thẻ QR
+                    </button>
+                    <button class="btn btn-warning fw-bold text-dark rounded-pill px-3 shadow-sm" onclick="window.openCustomerLookupModal()">
+                        <i class="fa-solid fa-mobile-screen-button me-1"></i> Tra Cứu Khách Hàng
+                    </button>
+                    <button class="btn btn-light fw-bold text-success rounded-pill px-3 shadow-sm" onclick="window.openNewMemberModal()">
+                        <i class="fa-solid fa-user-plus me-1"></i> + Đăng Ký Hội Viên Mới
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4 THẺ THỐNG KÊ CHÍNH -->
+    <div class="row g-3 mb-3">
+        <div class="col-xl-3 col-md-6 col-12">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-secondary fw-bold text-uppercase" style="font-size: 11px;">Tổng Số Hội Viên</small>
+                        <div class="fs-3 fw-bold text-success mt-1" id="statTotalMembers">0</div>
+                        <small class="text-muted" style="font-size: 11px;">Tất cả hạng thành viên</small>
+                    </div>
+                    <div class="rounded-circle p-3 bg-success-subtle text-success">
+                        <i class="fa-solid fa-users fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 col-12">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-secondary fw-bold text-uppercase" style="font-size: 11px;">Tổng Chi Tiêu Tích Lũy</small>
+                        <div class="fs-4 fw-bold text-primary mt-1" id="statTotalSpentAll">0 đ</div>
+                        <small class="text-muted" style="font-size: 11px;">Doanh thu từ khách quen</small>
+                    </div>
+                    <div class="rounded-circle p-3 bg-primary-subtle text-primary">
+                        <i class="fa-solid fa-wallet fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 col-12">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-secondary fw-bold text-uppercase" style="font-size: 11px;">Tổng Điểm Thưởng Khả Dụng</small>
+                        <div class="fs-4 fw-bold text-warning mt-1" id="statTotalPointsAll">0 điểm</div>
+                        <small class="text-muted" style="font-size: 11px;">Quy đổi: <b id="statTotalPointsVnd">0 đ</b></small>
+                    </div>
+                    <div class="rounded-circle p-3 bg-warning-subtle text-warning">
+                        <i class="fa-solid fa-coins fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 col-12">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-secondary fw-bold text-uppercase" style="font-size: 11px;">Số Dư Ví Trả Trước</small>
+                        <div class="fs-4 fw-bold text-danger mt-1" id="statTotalPrepaidAll">0 đ</div>
+                        <small class="text-muted" style="font-size: 11px;">Gói ăn chay định kỳ trả trước</small>
+                    </div>
+                    <div class="rounded-circle p-3 bg-danger-subtle text-danger">
+                        <i class="fa-solid fa-credit-card fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- THANH TABS CHUYỂN ĐỔI CHỨC NĂNG -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3 bg-white">
+        <div class="card-header bg-white border-0 pt-3 pb-0 px-3">
+            <ul class="nav nav-pills" id="memberTabsNav" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active fw-bold px-4 py-2 rounded-pill me-2" id="tabBtnMembersList" onclick="window.switchMemberSubTab('tab-members-list')">
+                        <i class="fa-solid fa-id-card me-2"></i> Danh Sách & Thẻ Điện Tử
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link fw-bold px-4 py-2 rounded-pill me-2 text-secondary" id="tabBtnPrepaidPhysical" onclick="window.switchMemberSubTab('tab-prepaid-physical')">
+                        <i class="fa-solid fa-wallet me-2"></i> Ví Trả Trước & Thẻ Cứng
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link fw-bold px-4 py-2 rounded-pill text-secondary me-2" id="tabBtnPolicyBirthdays" onclick="window.switchMemberSubTab('tab-policy-birthdays')">
+                        <i class="fa-solid fa-award me-2"></i> Cấu Hình Hạng & Sinh Nhật
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link fw-bold px-4 py-2 rounded-pill text-secondary" id="tabBtnMemberLogs" onclick="window.switchMemberSubTab('tab-member-logs')">
+                        <i class="fa-solid fa-clock-rotate-left me-2"></i> Nhật Ký & Biến Động
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card-body p-3">
+            <!-- ======================================================== -->
+            <!-- TAB 1: DANH SÁCH & THẺ ĐIỆN TỬ                           -->
+            <!-- ======================================================== -->
+            <div id="tab-members-list" class="member-sub-tab">
+                <!-- BỘ LỌC HẠNG THẺ & TÌM KIẾM -->
+                <div class="row g-2 mb-3 align-items-center">
+                    <div class="col-lg-7 col-12 d-flex gap-1 flex-wrap align-items-center" id="memberTierFilterButtonsContainer">
+                        <span class="small fw-bold text-secondary me-2"><i class="fa-solid fa-filter me-1"></i>Hạng thẻ:</span>
+                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 active fw-bold member-tier-filter-btn" data-tier="ALL" onclick="window.filterMembersByTier('ALL')">
+                            Tất Cả (<span id="countTierAll">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 fw-bold member-tier-filter-btn" data-tier="MAM_SEN" onclick="window.filterMembersByTier('MAM_SEN')">
+                            🌱 Mầm Sen (<span id="countTierMam">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold member-tier-filter-btn" data-tier="BUP_SEN" onclick="window.filterMembersByTier('BUP_SEN')">
+                            🪷 Búp Sen (<span id="countTierBup">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-bold member-tier-filter-btn" data-tier="SEN_HONG" onclick="window.filterMembersByTier('SEN_HONG')">
+                            🌸 Sen Hồng (<span id="countTierHong">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 fw-bold member-tier-filter-btn" data-tier="SEN_KIM_CUONG" onclick="window.filterMembersByTier('SEN_KIM_CUONG')">
+                            💎 Sen VIP (<span id="countTierKC">0</span>)
+                        </button>
+                    </div>
+
+                    <div class="col-lg-5 col-12">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                            <input type="text" id="memberSearchInput" class="form-control bg-light border-start-0" placeholder="Tìm theo Tên, Số điện thoại hoặc Mã thẻ..." onkeyup="window.handleMemberSearch(event)">
+                            <button class="btn btn-success fw-bold px-3" type="button" onclick="window.loadMembersList()">Tìm</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BẢNG DANH SÁCH THÀNH VIÊN -->
+                <div class="table-responsive border rounded-3 bg-white" style="min-height: 300px;">
+                    <table class="table table-hover align-middle m-0">
+                        <thead class="table-light">
+                            <tr class="small text-secondary text-uppercase" style="font-size: 11px;">
+                                <th style="width: 90px;">Mã Thẻ</th>
+                                <th>Hội Viên</th>
+                                <th>Số Điện Thoại</th>
+                                <th style="width: 140px;">Mật Khẩu Tạm Cấp</th>
+                                <th>Hạng Thẻ</th>
+                                <th class="text-end">Chi Tiêu</th>
+                                <th class="text-center">Điểm Thưởng</th>
+                                <th class="text-end">Ví Trả Trước</th>
+                                <th>Sinh Nhật</th>
+                                <th class="text-center" style="width: 220px;">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="membersTableTbody">
+                            <tr>
+                                <td colspan="10" class="text-center py-5 text-muted">
+                                    <i class="fa-solid fa-circle-notch fa-spin fa-2x text-success mb-2"></i>
+                                    <div>Đang nạp danh sách hội viên...</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                    <small class="text-muted" id="memberPaginationInfo">Hiển thị 0 hội viên</small>
+                    <div id="memberPaginationControls" class="d-flex gap-1"></div>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- TAB 2: VÍ TRẢ TRƯỚC (PREPAID) & THẺ CỨNG VẬT LÝ          -->
+            <!-- ======================================================== -->
+            <div id="tab-prepaid-physical" class="member-sub-tab d-none">
+                <div class="row g-4">
+                    <!-- GÓI NẠP TRẢ TRƯỚC -->
+                    <div class="col-lg-7 col-12">
+                        <div class="p-3 bg-light rounded-4 border h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <h5 class="fw-bold text-success m-0"><i class="fa-solid fa-wallet me-2"></i>Gói Nạp Trả Trước (Prepaid)</h5>
+                                    <small class="text-muted">Dành cho khách ăn chay trường, văn phòng ăn trưa định kỳ</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-success-subtle text-success fw-bold px-3 py-1">TẶNG ĐẾN 15%</span>
+                                    <button type="button" class="btn btn-sm btn-success fw-bold rounded-pill shadow-sm" onclick="window.openManagePrepaidPackageModal()">
+                                        <i class="fa-solid fa-plus-circle me-1"></i> Thêm Gói Mới
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3" id="prepaidPackagesContainer">
+                                <!-- Render danh sách gói nạp trả trước động (thêm / sửa / xóa / nạp) -->
+                            </div>
+
+                            <div class="p-3 bg-white rounded-3 border">
+                                <h6 class="fw-bold text-dark mb-1"><i class="fa-solid fa-circle-info text-primary me-2"></i>Quy trình sử dụng ví trả trước:</h6>
+                                <ul class="small text-secondary m-0 ps-3">
+                                    <li>Khách nạp tiền tại quầy thu ngân bằng tiền mặt hoặc chuyển khoản VietQR.</li>
+                                    <li>Mỗi lần dùng bữa, hệ thống tự động trừ trực tiếp vào số dư ví của khách.</li>
+                                    <li>Số dư ví được bảo lưu trọn đời, không bao giờ hết hạn.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- THẺ CỨNG VẬT LÝ & IN THẺ MÃ QR -->
+                    <div class="col-lg-5 col-12">
+                        <div class="p-3 bg-light rounded-4 border h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <h5 class="fw-bold text-dark m-0"><i class="fa-solid fa-id-badge text-warning me-2"></i>Thẻ Cứng Vật Lý Cho Khách VIP</h5>
+                                    <small class="text-muted">In thẻ nhựa/mica có mã QR định danh cho người lớn tuổi</small>
+                                </div>
+                            </div>
+
+                            <!-- MÔ PHỎNG THẺ CỨNG VẬT LÝ MẪU -->
+                            <div class="p-3 mb-3 rounded-4 shadow-sm text-white" style="background: linear-gradient(135deg, #4a148c 0%, #7b1fa2 60%, #ffd700 100%); position: relative; overflow: hidden; min-height: 200px;">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fs-3">🪷</span>
+                                        <div>
+                                            <div class="fw-bold fs-6 tracking-wide">NHÀ HÀNG CHAY HOA SEN</div>
+                                            <div class="text-white-50" style="font-size: 11px;">THẺ HỘI VIÊN CAO CẤP</div>
+                                        </div>
+                                    </div>
+                                    <span class="badge bg-warning text-dark fw-bold px-2 py-1 shadow-sm">SEN KIM CƯƠNG</span>
+                                </div>
+
+                                <div class="my-3 text-center">
+                                    <div class="fw-bold fs-5 text-truncate" id="previewPhysicalName">Bác Thiện Tâm</div>
+                                    <div class="font-monospace text-white-50 small" id="previewPhysicalPhone">0909 888 999</div>
+                                </div>
+
+                                <div class="d-flex justify-content-between align-items-end">
+                                    <div>
+                                        <div class="text-white-50" style="font-size: 10px;">MÃ ĐỊNH DANH</div>
+                                        <div class="fw-bold font-monospace text-warning fs-6" id="previewPhysicalCode">HS-888999</div>
+                                    </div>
+                                    <div class="bg-white p-1 rounded-2 shadow">
+                                        <i class="fa-solid fa-qrcode fs-2 text-dark"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-outline-dark fw-bold rounded-pill w-100 py-2" onclick="window.openPrintPhysicalCardModal()">
+                                <i class="fa-solid fa-print me-2"></i> Mở Trình Thiết Kế & In Phôi Thẻ Cứng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- TAB 3: QUẢN LÝ CẤU HÌNH HẠNG THẺ & SINH NHẬT             -->
+            <!-- ======================================================== -->
+            <div id="tab-policy-birthdays" class="member-sub-tab d-none">
+                <div class="row g-4">
+                    <!-- BẢNG CẤU HÌNH CÁC HẠNG THẺ (DỘNG CRUD) -->
+                    <div class="col-lg-8 col-12">
+                        <div class="p-3 bg-light rounded-4 border h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                <div>
+                                    <h5 class="fw-bold text-success m-0"><i class="fa-solid fa-award me-2"></i>Cấu Hình Danh Sách Hạng Thẻ Thành Viên</h5>
+                                    <small class="text-muted">Quản lý thêm, sửa, xóa, chi tiêu tối thiểu, % giảm giá, % tích điểm & quyền lợi</small>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3 shadow-sm" onclick="window.batchReevaluateTiers()" title="Quét và cập nhật hạng tự động cho tất cả khách dựa trên tổng chi tiêu">
+                                        <i class="fa-solid fa-rotate me-1"></i> Xét Lại Hạng Toàn Bộ
+                                    </button>
+                                    <button class="btn btn-sm btn-success fw-bold rounded-pill px-3 shadow-sm" onclick="window.openNewTierModal()">
+                                        <i class="fa-solid fa-plus me-1"></i> + Thêm Hạng Thẻ Mới
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-responsive border rounded-3 bg-white mb-3" style="min-height: 200px;">
+                                <table class="table table-hover table-bordered align-middle m-0 small">
+                                    <thead class="table-success text-center">
+                                        <tr class="text-uppercase" style="font-size: 11px;">
+                                            <th style="width: 50px;">STT</th>
+                                            <th style="width: 60px;">Icon</th>
+                                            <th>Mã & Tên Hạng</th>
+                                            <th>Chi Tiêu Tối Thiểu</th>
+                                            <th>Giảm Giá</th>
+                                            <th>Tích Điểm</th>
+                                            <th>Quyền Lợi Sinh Nhật</th>
+                                            <th style="width: 90px;">Thao Tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tiersPolicyTableTbody">
+                                        <tr>
+                                            <td colspan="8" class="text-center py-4 text-muted">
+                                                <i class="fa-solid fa-circle-notch fa-spin me-2 text-success"></i>Đang tải cấu hình hạng thẻ...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- ĐIỀU KIỆN ÂM LỊCH & CHÍNH SÁCH NGÀY CHAY -->
+                            <div class="card border-0 rounded-3 shadow-sm bg-white p-3">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <div>
+                                        <div class="fw-bold text-primary"><i class="fa-solid fa-calendar-star me-2"></i>Ưu Đãi Ngày Chay Âm Lịch (Mùng 1 & Rằm 15)</div>
+                                        <small class="text-muted">Nhân đôi tích điểm (x2 points) tự động cho hội viên khi dùng bữa</small>
+                                    </div>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" id="switchFestivalOverride" style="cursor: pointer; transform: scale(1.2);" onchange="window.toggleFestivalOverride(this.checked)">
+                                        <label class="form-check-label small fw-bold text-secondary" for="switchFestivalOverride">Bật x2 sự kiện</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- KHÁCH HÀNG CÓ SINH NHẬT TRONG TUẦN NÀY -->
+                    <div class="col-lg-4 col-12">
+                        <div class="p-3 bg-light rounded-4 border h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="fw-bold text-danger m-0"><i class="fa-solid fa-cake-candles me-2"></i>Sinh Nhật Hội Viên Tuần Này</h5>
+                                <span class="badge bg-danger rounded-pill px-2 py-1" id="countUpcomingBirthdays">0</span>
+                            </div>
+
+                            <div id="upcomingBirthdaysContainer" class="d-flex flex-column gap-2" style="max-height: 380px; overflow-y: auto;">
+                                <div class="text-center py-4 text-muted">
+                                    <i class="fa-solid fa-champagne-glasses fa-2x text-secondary mb-2"></i>
+                                    <div>Không có sinh nhật nào trong tuần này.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- TAB 4: NHẬT KÝ HOẠT ĐỘNG & BIẾN ĐỘNG HẠNG (AUDIT LOGS)   -->
+            <!-- ======================================================== -->
+            <div id="tab-member-logs" class="member-sub-tab d-none">
+                <div class="p-3 bg-light rounded-4 border">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold text-dark m-0"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Nhật Ký Biến Động Hạng & Điểm Thưởng</h5>
+                            <small class="text-muted">Ghi nhận minh bạch mọi thao tác thăng hạng, đổi hạng, sửa chi tiêu, điều chỉnh điểm & nạp ví</small>
+                        </div>
+                        <div class="d-flex gap-2 align-items-center">
+                            <select id="logActionFilterSelect" class="form-select form-select-sm fw-semibold" style="width: 200px;" onchange="window.filterMemberLogs(this.value)">
+                                <option value="ALL">-- Tất cả loại nhật ký --</option>
+                                <option value="TIER_MANUAL_CHANGE">⭐ Thăng/Đổi Hạng Thủ Công</option>
+                                <option value="TIER_UPGRADE_AUTO">🚀 Tự Động Thăng Hạng</option>
+                                <option value="SPENT_ADJUST">💰 Điều Chỉnh Chi Tiêu</option>
+                                <option value="POINT_ADJUST">🎯 Điều Chỉnh Điểm</option>
+                                <option value="PREPAID_TOPUP">💳 Nạp Ví Trả Trước</option>
+                                <option value="TIER_CONFIG_UPDATE">⚙️ Thay Đổi Cấu Hình Hạng</option>
+                                <option value="BATCH_EVALUATE">🔄 Quét Xét Lại Hạng Hàng Loạt</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold" onclick="window.loadMemberLogs()">
+                                <i class="fa-solid fa-arrows-rotate me-1"></i> Làm Mới
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive border rounded-3 bg-white mb-3" style="min-height: 250px;">
+                        <table class="table table-hover align-middle m-0 small">
+                            <thead class="table-light">
+                                <tr class="text-uppercase text-secondary" style="font-size: 11px;">
+                                    <th style="width: 140px;">Thời Gian</th>
+                                    <th>Hội Viên / Khách Hàng</th>
+                                    <th>Loại Hoạt Động</th>
+                                    <th>Chi Tiết Biến Động</th>
+                                    <th>Lý Do / Nội Dung</th>
+                                    <th>Người Thực Hiện</th>
+                                </tr>
+                            </thead>
+                            <tbody id="memberLogsTableTbody">
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">
+                                        <i class="fa-solid fa-circle-notch fa-spin me-2 text-primary"></i>Đang tải lịch sử nhật ký...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <small class="text-muted" id="memberLogsPaginationInfo">Hiển thị 0 bản ghi</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 1: ĐĂNG KÝ HỘI VIÊN MỚI / CHỈNH SỬA THÔNG TIN        -->
+<!-- ======================================================== -->
+<div class="modal fade" id="memberFormModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold" id="memberFormModalTitle">
+                    <i class="fa-solid fa-user-plus me-2"></i>Đăng Ký Hội Viên Mầm Sen
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('memberFormModal')"></button>
+            </div>
+            <form id="memberEditForm" onsubmit="window.submitMemberForm(event)">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="formMemberId" value="">
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Số điện thoại: <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="fa-solid fa-phone text-muted"></i></span>
+                            <input type="tel" id="formMemberPhone" class="form-control fw-bold" placeholder="VD: 0912 345 678" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Họ và tên khách hàng: <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="fa-solid fa-user text-muted"></i></span>
+                            <input type="text" id="formMemberName" class="form-control fw-bold" placeholder="VD: Chị Bích Lan" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Email nhận ưu đãi & thông tin khuyến mãi:</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="fa-solid fa-envelope text-muted"></i></span>
+                            <input type="email" id="formMemberEmail" class="form-control" placeholder="VD: khachhang@gmail.com">
+                        </div>
+                        <small class="text-muted d-block mt-1" style="font-size: 11px;">
+                            <i class="fa-solid fa-paper-plane text-success me-1"></i> Quản lý gửi trực tiếp các voucher, chương trình ưu đãi, giảm giá tri ân tới Email này.
+                        </small>
+                    </div>
+
+                    <div class="mb-3" id="formMemberPasswordGroup">
+                        <label class="form-label small fw-bold text-secondary">
+                            Mật khẩu tạm cấp cho khách hàng: <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="fa-solid fa-key text-muted"></i></span>
+                            <input type="text" id="formMemberPassword" class="form-control font-monospace fw-bold" value="123456" placeholder="Mặc định: 123456" required>
+                            <button class="btn btn-outline-secondary" type="button" onclick="window.generateRandomMemberPassword()" title="Tạo mật khẩu ngẫu nhiên">
+                                <i class="fa-solid fa-arrows-rotate me-1"></i> Tạo Mới
+                            </button>
+                        </div>
+                        <small class="text-muted d-block mt-1" style="font-size: 11.5px;">
+                            <i class="fa-solid fa-circle-info text-success me-1"></i> Cung cấp SĐT & Mật khẩu này để khách hàng tự đăng nhập tra cứu thẻ và lịch sử đơn hàng.
+                        </small>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold text-secondary">Ngày sinh (nhận ưu đãi sinh nhật):</label>
+                            <input type="date" id="formMemberBirthdate" class="form-control">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold text-secondary">Giới tính:</label>
+                            <select id="formMemberGender" class="form-select">
+                                <option value="FEMALE">Nữ</option>
+                                <option value="MALE">Nam</option>
+                                <option value="OTHER">Khác</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Ghi chú khẩu vị / Đặc điểm:</label>
+                        <textarea id="formMemberNotes" class="form-control" rows="2" placeholder="VD: Ăn chay trường, không ăn ngũ vị tân, ít ngọt..."></textarea>
+                    </div>
+
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="d-flex align-items-center gap-2 text-success fw-bold small">
+                            <i class="fa-solid fa-circle-check"></i> Tự động kích hoạt hạng Mầm Sen
+                        </div>
+                        <small class="text-muted d-block mt-1">Được tích lũy 3% giá trị đơn hàng ngay từ lần dùng bữa đầu tiên.</small>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('memberFormModal')">Đóng</button>
+                    <button type="submit" class="btn btn-success fw-bold rounded-pill px-4 shadow-sm" id="btnSubmitMember">
+                        <i class="fa-solid fa-check me-1"></i> Lưu Hội Viên
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 2: XEM THẺ ĐIỆN TỬ DIGITAL MEMBERSHIP CARD & QR      -->
+<!-- ======================================================== -->
+<div class="modal fade" id="digitalCardModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header border-0 bg-dark text-white py-3">
+                <h5 class="modal-title fw-bold fs-6"><i class="fa-solid fa-id-card me-2 text-warning"></i>Thẻ Điện Tử Hội Viên Chay Hoa Sen</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('digitalCardModal')"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <!-- THẺ DIGITAL CARD HIỆU ỨNG ÁNH KIM -->
+                <div id="digitalCardView" class="p-4 rounded-4 shadow-lg text-white mb-3" style="position: relative; overflow: hidden; min-height: 220px; transition: transform 0.3s ease;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fs-2" id="cardIcon">🪷</span>
+                            <div>
+                                <div class="fw-bold fs-6 tracking-wide">NHÀ HÀNG CHAY HOA SEN</div>
+                                <div class="text-white-50" style="font-size: 11px;">HOA SEN DIGITAL MEMBERSHIP</div>
+                            </div>
+                        </div>
+                        <span class="badge fw-bold px-3 py-1 shadow-sm fs-6" id="cardTierBadge">MẦM SEN</span>
+                    </div>
+
+                    <div class="my-4 text-center">
+                        <h4 class="fw-bold m-0" id="cardMemberName">Khách Hàng</h4>
+                        <div class="font-monospace text-white-50 fs-6 mt-1" id="cardMemberPhone">0912 345 678</div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-end pt-2 border-top border-white-50">
+                        <div>
+                            <small class="text-white-50 d-block" style="font-size: 10px;">ĐIỂM KHẢ DỤNG</small>
+                            <span class="fw-bold fs-5 text-warning" id="cardPoints">0</span> <small>điểm</small>
+                        </div>
+                        <div>
+                            <small class="text-white-50 d-block" style="font-size: 10px;">VÍ TRẢ TRƯỚC</small>
+                            <span class="fw-bold fs-5 text-white" id="cardPrepaid">0 đ</span>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-white-50 d-block" style="font-size: 10px;">MÃ ĐỊNH DANH</small>
+                            <span class="fw-bold font-monospace fs-6 text-white" id="cardCodeText">HS-000000</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MÃ QR ĐỊNH DANH QUÉT TẠI QUẦY -->
+                <div class="card border-0 rounded-3 shadow-sm bg-white p-3 text-center mb-3">
+                    <div class="fw-bold text-dark mb-1"><i class="fa-solid fa-qrcode me-1 text-primary"></i>Mã QR Định Danh Quét Khi Gọi Món / Thanh Toán</div>
+                    <div id="cardQrCodeContainer" class="d-flex justify-content-center py-2">
+                        <!-- QR Image / Canvas rendered here -->
+                        <img id="cardQrImg" src="" alt="QR Hội viên" class="img-fluid rounded border shadow-sm p-1" style="width: 140px; height: 140px; object-fit: contain;">
+                    </div>
+                    <small class="text-muted">Đưa mã này cho nhân viên hoặc thu ngân để tự động áp dụng ưu đãi giảm giá.</small>
+                </div>
+
+                <!-- LỊCH SỬ GIAO DỊCH GẦN ĐÂY -->
+                <div class="card border-0 rounded-3 shadow-sm bg-white p-3">
+                    <div class="fw-bold text-dark mb-2 small"><i class="fa-solid fa-clock-rotate-left me-1 text-success"></i>Lịch Sử Tích Điểm & Tiêu Điểm Gần Đây</div>
+                    <div id="cardTransactionsList" style="max-height: 180px; overflow-y: auto;">
+                        <small class="text-muted">Chưa có giao dịch nào.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('digitalCardModal')">Đóng</button>
+                <button type="button" class="btn btn-success fw-bold rounded-pill px-4 shadow-sm" onclick="window.printMemberQrCard()">
+                    <i class="fa-solid fa-print me-1"></i> In Thẻ Ra Giấy
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 3: NẠP VÍ TRẢ TRƯỚC (PREPAID TOPUP)                  -->
+<!-- ======================================================== -->
+<div class="modal fade" id="topupPrepaidModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white py-3">
+                <h5 class="modal-title fw-bold fs-6"><i class="fa-solid fa-wallet me-2"></i>Nạp Tiền Vào Ví TrẢ Trước (Prepaid)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('topupPrepaidModal')"></button>
+            </div>
+            <form id="topupPrepaidForm" onsubmit="window.submitTopupPrepaid(event)">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="topupMemberId" value="">
+                    
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold text-dark m-0" id="topupMemberName">Khách Hàng</h6>
+                                <small class="text-muted" id="topupMemberPhone">0912 345 678</small>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted d-block">Số dư hiện tại:</small>
+                                <span class="fw-bold fs-6 text-success" id="topupCurrentBalance">0 đ</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CHỌN GÓI NẠP -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Chọn Gói Nạp Ưu Đãi:</label>
+                        <div class="row g-2" id="topupPackageRadioGroup">
+                            <!-- Nạp danh sách radio gói nạp động từ CSDL -->
+                        </div>
+                    </div>
+
+                    <!-- HÌNH THỨC THANH TOÁN TIỀN NẠP -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Phương thức thu tiền nạp:</label>
+                        <select id="topupPayMethod" class="form-select">
+                            <option value="CASH">Tiền mặt tại quầy</option>
+                            <option value="BANK_TRANSFER">Chuyển khoản VietQR</option>
+                            <option value="CARD">Quẹt thẻ máy POS</option>
+                        </select>
+                    </div>
+
+                    <!-- TỔNG KẾT NẠP -->
+                    <div class="p-3 bg-success-subtle rounded-3 border border-success d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-success fw-bold d-block">TỔNG SỐ TIỀN VÀO VÍ:</small>
+                            <span class="fs-4 fw-bold text-success" id="topupTotalReceived">1.100.000 đ</span>
+                        </div>
+                        <div class="text-end small">
+                            <span class="text-muted">Khách thanh toán:</span> <b id="topupPayAmount">1.000.000 đ</b><br>
+                            <span class="text-success">Quán tặng thêm:</span> <b class="text-success" id="topupBonusAmount">100.000 đ</b>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('topupPrepaidModal')">Hủy</button>
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm">
+                        <i class="fa-solid fa-check me-1"></i> Xác Nhận Nạp Tiền
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 4: TRA CỨU KHÁCH HÀNG (DÀNH CHO KHÁCH TỰ XEM)         -->
+<!-- ======================================================== -->
+<div class="modal fade" id="customerLookupModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-warning text-dark py-3">
+                <h5 class="modal-title fw-bold fs-6"><i class="fa-solid fa-mobile-screen-button me-2"></i>Tra Cứu Điểm & Thẻ Hội Viên Cá Nhân</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="window.closeMemberModal('customerLookupModal')"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-secondary small mb-3">Quý khách vui lòng nhập số điện thoại đã đăng ký tại Chay Hoa Sen để xem hạng thẻ và điểm thưởng:</p>
+                <div class="input-group mb-3">
+                    <span class="input-group-text bg-light"><i class="fa-solid fa-phone text-muted"></i></span>
+                    <input type="tel" id="lookupPhoneInput" class="form-control form-control-lg fw-bold" placeholder="Nhập SĐT hoặc Mã thẻ của bạn..." onkeydown="if(event.key==='Enter') window.doCustomerLookup()">
+                    <button class="btn btn-outline-success fw-bold px-3" type="button" onclick="window.cartOpenQrScannerModal('lookupPhoneInput')" title="Quét mã QR thẻ hội viên qua Camera">
+                        <i class="fa-solid fa-qrcode me-1"></i> Quét QR
+                    </button>
+                    <button class="btn btn-warning fw-bold text-dark px-3" type="button" onclick="window.doCustomerLookup()">Tra Cứu</button>
+                </div>
+
+                <div id="lookupResultArea" style="display: none;">
+                    <!-- Render dynamic card -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 5: ĐIỀU CHỈNH ĐIỂM THỦ CÔNG (QUẢN LÝ)               -->
+<!-- ======================================================== -->
+<div class="modal fade" id="adjustPointsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-dark text-white py-3">
+                <h5 class="modal-title fw-bold fs-6"><i class="fa-solid fa-sliders me-2 text-warning"></i>Điều Chỉnh Điểm</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('adjustPointsModal')"></button>
+            </div>
+            <form onsubmit="window.submitAdjustPoints(event)">
+                <div class="modal-body p-3">
+                    <input type="hidden" id="adjustMemberId" value="">
+                    <div class="small text-muted mb-2">Thành viên: <b class="text-dark" id="adjustMemberName">Khách</b></div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Số điểm thay đổi (+ hoặc -):</label>
+                        <input type="number" id="adjustPointsDelta" class="form-control text-center fw-bold fs-5" placeholder="+50 hoặc -30" required>
+                        <small class="text-muted">Ví dụ: Nhập 50 để cộng thêm 50 điểm, nhập -20 để trừ 20 điểm.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Lý do điều chỉnh:</label>
+                        <input type="text" id="adjustReason" class="form-control" placeholder="VD: Bù điểm sự cố, quà tri ân..." required>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-sm btn-secondary rounded-pill px-3" data-bs-dismiss="modal" onclick="window.closeMemberModal('adjustPointsModal')">Đóng</button>
+                    <button type="submit" class="btn btn-sm btn-dark fw-bold rounded-pill px-3">Lưu Điều Chỉnh</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 6: THÊM / CHỈNH SỬA CẤU HÌNH HẠNG THẺ               -->
+<!-- ======================================================== -->
+<div class="modal fade" id="tierFormModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold" id="tierFormModalTitle">
+                    <i class="fa-solid fa-award me-2"></i>Thêm / Sửa Hạng Thẻ Thành Viên
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('tierFormModal')"></button>
+            </div>
+            <form id="tierConfigForm" onsubmit="window.submitTierForm(event)">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="formTierId" value="">
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-secondary">Mã Hạng (Code): <span class="text-danger">*</span></label>
+                            <input type="text" id="formTierCode" class="form-control font-monospace text-uppercase fw-bold" placeholder="VD: SEN_VANG" required>
+                            <small class="text-muted" style="font-size: 11px;">Không dấu, nối gạch dưới</small>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold text-secondary">Tên Hạng Thẻ: <span class="text-danger">*</span></label>
+                            <input type="text" id="formTierName" class="form-control fw-bold" placeholder="VD: Sen Vàng Cao Cấp" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Biểu tượng (Icon):</label>
+                            <input type="text" id="formTierIcon" class="form-control text-center fs-5" placeholder="🪷" value="🪷" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-secondary">Chi Tiêu Tối Thiểu (VNĐ): <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" id="formTierMinSpent" class="form-control fw-bold text-end" min="0" step="10000" placeholder="0" required>
+                                <span class="input-group-text">đ</span>
+                            </div>
+                            <small class="text-muted" style="font-size: 11px;">Mức chi tiêu để đạt hạng này</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-secondary">% Giảm Giá Trực Tiếp: <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" id="formTierDiscount" class="form-control fw-bold text-end" min="0" max="100" step="0.5" placeholder="5" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-secondary">% Tích Lũy Điểm: <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" id="formTierPointRate" class="form-control fw-bold text-end" min="0" max="100" step="0.5" placeholder="3" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Đặc Quyền & Quà Dịp Sinh Nhật:</label>
+                        <input type="text" id="formTierBirthdayReward" class="form-control" placeholder="VD: Tặng voucher 100.000đ + Đĩa tráng miệng hạt sen">
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-secondary">Màu Nền Thẻ (CSS Gradient / Hex):</label>
+                            <input type="text" id="formTierCardBg" class="form-control font-monospace small" placeholder="linear-gradient(135deg, #1b5e20, #4caf50)">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Thứ Tự Sắp Xếp:</label>
+                            <input type="number" id="formTierSortOrder" class="form-control text-center fw-bold" min="1" max="99" value="10">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Hạng Mặc Định Mới:</label>
+                            <select id="formTierIsDefault" class="form-select">
+                                <option value="0">Không</option>
+                                <option value="1">Là Mặc Định (Mầm)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('tierFormModal')">Đóng</button>
+                    <button type="submit" class="btn btn-success fw-bold rounded-pill px-4 shadow-sm" id="btnSubmitTier">
+                        <i class="fa-solid fa-check me-1"></i> Lưu Cấu Hình Hạng
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 7: QUẢN LÝ TRỰC TIẾP ĐỔI / THĂNG HẠNG CHO HỘI VIÊN  -->
+<!-- ======================================================== -->
+<div class="modal fade" id="changeTierManualModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-warning text-dark py-3">
+                <h5 class="modal-title fw-bold fs-6">
+                    <i class="fa-solid fa-star me-2"></i>Thăng / Đổi Hạng Hội Viên Trực Tiếp
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="window.closeMemberModal('changeTierManualModal')"></button>
+            </div>
+            <form id="changeTierManualForm" onsubmit="window.submitChangeTierManual(event)">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="manualTierMemberId" value="">
+                    
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold text-dark m-0" id="manualTierMemberName">Khách Hàng</h6>
+                                <small class="text-muted" id="manualTierMemberCurrent">Hạng hiện tại: Mầm Sen</small>
+                            </div>
+                            <span class="badge bg-secondary px-2 py-1" id="manualTierCurrentBadge">HIỆN TẠI</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Chọn Hạng Thẻ Mới Cần Áp Dụng: <span class="text-danger">*</span></label>
+                        <select id="manualTierNewSelect" class="form-select fw-bold py-2" required>
+                            <!-- Dynamic tiers options -->
+                        </select>
+                        <small class="text-muted">Hạng mới sẽ có hiệu lực ngay lập tức với các đơn hàng tiếp theo.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Lý do điều chỉnh hạng: <span class="text-danger">*</span></label>
+                        <input type="text" id="manualTierReason" class="form-control" placeholder="VD: Khách VIP đối tác, Quà tặng đặc biệt từ Quản lý, Tri ân..." required>
+                    </div>
+
+                    <div class="alert alert-info py-2 small m-0 rounded-3">
+                        <i class="fa-solid fa-shield-halved me-1"></i> Mọi thao tác đổi hạng sẽ được lưu vào <b>Nhật ký hoạt động</b> cùng tên người thực hiện để đối soát.
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('changeTierManualModal')">Hủy</button>
+                    <button type="submit" class="btn btn-warning fw-bold text-dark rounded-pill px-4 shadow-sm">
+                        <i class="fa-solid fa-check me-1"></i> Xác Nhận Đổi Hạng
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 8: ĐIỀU CHỈNH CHI TIÊU TÍCH LŨY (+/-)                 -->
+<!-- ======================================================== -->
+<div class="modal fade" id="adjustSpentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white py-3">
+                <h5 class="modal-title fw-bold fs-6">
+                    <i class="fa-solid fa-money-bill-transfer me-2"></i>Điều Chỉnh Chi Tiêu Tích Lũy
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('adjustSpentModal')"></button>
+            </div>
+            <form id="adjustSpentForm" onsubmit="window.submitAdjustSpent(event)">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="adjustSpentMemberId" value="">
+                    
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold text-dark m-0" id="adjustSpentMemberName">Khách Hàng</h6>
+                                <small class="text-muted">Tổng chi tiêu hiện tại:</small>
+                            </div>
+                            <span class="fs-5 fw-bold text-primary" id="adjustSpentCurrentVal">0 đ</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Số tiền chi tiêu thay đổi (+ hoặc - VNĐ): <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="number" id="adjustSpentDelta" class="form-control fw-bold text-end fs-5" step="1000" placeholder="+500000 hoặc -200000" required>
+                            <span class="input-group-text">đ</span>
+                        </div>
+                        <small class="text-muted">Ví dụ: Nhập <code>1000000</code> để cộng thêm 1 triệu, nhập <code>-500000</code> để trừ bớt.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Lý do điều chỉnh: <span class="text-danger">*</span></label>
+                        <input type="text" id="adjustSpentReason" class="form-control" placeholder="VD: Gộp hóa đơn thanh toán ngoài, Điều chỉnh sai sót..." required>
+                    </div>
+
+                    <div class="alert alert-success py-2 small m-0 rounded-3">
+                        <i class="fa-solid fa-bolt me-1"></i> Hệ thống sẽ tự động tính lại hạng thẻ thành viên ngay sau khi điều chỉnh chi tiêu.
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('adjustSpentModal')">Hủy</button>
+                    <button type="submit" class="btn btn-primary fw-bold rounded-pill px-4 shadow-sm">
+                        <i class="fa-solid fa-check me-1"></i> Lưu Thay Đổi
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 9: QUẢN LÝ GÓI NẠP VÍ TRẢ TRƯỚC (THÊM / SỬA)       -->
+<!-- ======================================================== -->
+<div class="modal fade" id="managePrepaidPackageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold fs-6" id="managePrepaidModalTitle">
+                    <i class="fa-solid fa-wallet me-2"></i>Thêm Gói Nạp Ví Trả Trước
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('managePrepaidPackageModal')"></button>
+            </div>
+            <form id="managePrepaidPackageForm" onsubmit="window.savePrepaidPackage(event)">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="editPackageId" value="">
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Tên gói nạp: <span class="text-danger">*</span></label>
+                        <input type="text" id="editPackageName" class="form-control fw-bold" placeholder="VD: Gói An Lạc, Gói Tinh Tấn, Gói VIP..." required>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Số tiền nạp (VNĐ): <span class="text-danger">*</span></label>
+                            <input type="number" id="editPackageTopup" class="form-control fw-bold text-end" min="10000" step="10000" placeholder="1000000" required oninput="window.calcPrepaidPackageTotal()">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Tiền tặng thêm (VNĐ):</label>
+                            <input type="number" id="editPackageBonus" class="form-control fw-bold text-end text-success" min="0" step="10000" placeholder="100000" value="0" oninput="window.calcPrepaidPackageTotal()">
+                        </div>
+                    </div>
+
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="small fw-bold text-dark">Tổng số dư vào ví khách:</span>
+                            <span class="fs-5 fw-bold text-success" id="editPackageTotalPreview">0 đ</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Huy hiệu ưu đãi hiển thị:</label>
+                        <input type="text" id="editPackageBadge" class="form-control" placeholder="VD: + TẶNG 100.000 đ hoặc TẶNG 15%">
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Màu chủ đạo thẻ:</label>
+                            <div class="d-flex gap-2 align-items-center">
+                                <input type="color" id="editPackageBorderColor" class="form-control form-control-color p-0 border-0" value="#2e7d32" style="width: 44px; height: 38px;">
+                                <select id="editPackageColorPreset" class="form-select form-select-sm" onchange="window.selectPrepaidColorPreset(this.value)">
+                                    <option value="#2e7d32">Xanh lá (An Lạc)</option>
+                                    <option value="#0288d1">Xanh dương (Tinh Tấn)</option>
+                                    <option value="#f59e0b">Cam vàng (Hỷ Xả)</option>
+                                    <option value="#6a1b9a">Tím sen (VIP)</option>
+                                    <option value="#d81b60">Hồng sen</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Thứ tự hiển thị:</label>
+                            <input type="number" id="editPackageSort" class="form-control text-center" value="1" min="1">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Mô tả chi tiết gói:</label>
+                        <input type="text" id="editPackageDesc" class="form-control" placeholder="VD: Dành cho khách dùng bữa trưa định kỳ...">
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('managePrepaidPackageModal')">Hủy</button>
+                    <button type="submit" class="btn btn-success fw-bold rounded-pill px-4 shadow-sm">
+                        <i class="fa-solid fa-save me-1"></i> Lưu Gói Nạp
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,15 @@
+D:\Project Food>npx web-push generate-vapid-keys
+
+=======================================
+
+Public Key:
+BFmaDo_JpNOqR1MVH1gt_bSSnjure4CRP2OIZottClQfPuIJY7OVh1jI1fThGtPyflKA8exbgyKzdH0bJ44rMMI
+
+Private Key:
+7QYk-BE31QKZ1s_1BLBkmtWh83x23kTaRHX03p6-o-8
+
+=======================================
+
+
+npm install @capacitor/core @capacitor/cli @capacitor/ios
+npx cap init "Hoa Sen POS" "com.hoasen.pos" 

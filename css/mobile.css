@@ -1,0 +1,33 @@
+/* Ép khung chứa Danh mục luôn nằm trên 1 HÀNG NGANG duy nhất */
+#categoryTabs,
+#categoryTabsContainer,
+.menu-category-scroll {
+    display: flex !important;
+    flex-wrap: nowrap !important; /* Tuyệt đối KHÔNG cho xuống dòng */
+    overflow-x: auto !important;  /* Cho phép vuốt ngang */
+    overflow-y: hidden !important;
+    white-space: nowrap !important;
+    gap: 8px !important;
+    padding: 8px 4px !important;
+    -webkit-overflow-scrolling: touch; /* Vuốt mượt trên iPhone */
+    scroll-behavior: smooth;
+}
+
+/* Ẩn thanh cuộn xấu xí trên cả Android & iOS */
+#categoryTabsContainer::-webkit-scrollbar,
+.menu-category-scroll::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Cố định các nút danh mục không bị co co rúm lại */
+#categoryTabsContainer .btn,
+.menu-category-scroll .btn {
+    flex: 0 0 auto !important; /* Giữ nguyên kích thước nút, không bị bóp nghẹt */
+    white-space: nowrap !important;
+    border-radius: 50px !important;
+    padding: 6px 14px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+}

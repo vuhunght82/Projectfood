@@ -1,0 +1,668 @@
+<div class="container-fluid py-3">
+    <!-- THANH BANNER THÔNG TIN NHÂN VIÊN & CÔNG TẮC PHẠM VI ĐƠN HÀNG -->
+    <div class="card shadow-sm border-0 rounded-3 mb-3 bg-white border-start border-4 border-success p-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h5 class="fw-bold text-success mb-1" id="staffOrdersUserBanner">
+                    <i class="fa-solid fa-clipboard-user me-2"></i>Đơn Hàng & Nhật Ký Công Việc
+                </h5>
+                <div class="text-secondary small" id="staffOrdersUserSubtext">
+                    Theo dõi các đơn hàng đang xử lý, trạng thái thanh toán và hiệu suất làm việc
+                </div>
+            </div>
+            
+            <div class="d-flex align-items-center gap-2">
+                <!-- Công tắc chuyển Đơn của tôi vs Toàn bộ quán -->
+                <div class="btn-group btn-group-sm" role="group" id="ordersScopeBtnGroup">
+                    <input type="radio" class="btn-check" name="ordersScope" id="scopeMyOrders" autocomplete="off" checked onchange="window.setOrdersScope('MY_ORDERS')">
+                    <label class="btn btn-outline-success fw-bold" for="scopeMyOrders">
+                        <i class="fa-solid fa-user me-1"></i> Đơn Của Tôi
+                    </label>
+                    <input type="radio" class="btn-check" name="ordersScope" id="scopeAllOrders" autocomplete="off" onchange="window.setOrdersScope('ALL_ORDERS')">
+                    <label class="btn btn-outline-secondary fw-bold" for="scopeAllOrders">
+                        <i class="fa-solid fa-store me-1"></i> Toàn Bộ Quán
+                    </label>
+                </div>
+
+                <button class="btn btn-sm btn-outline-success rounded-pill px-3 fw-bold" onclick="window.loadOrders()">
+                    <i class="fa-solid fa-rotate me-1"></i> Làm mới
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4 THẺ CHỈ SỐ KPI TỔNG QUAN -->
+    <div class="row g-2 mb-3" id="ordersKpiCardsRow">
+        <!-- Đang phục vụ / Đang xử lý -->
+        <div class="col-lg-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-warning h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-secondary small fw-bold text-uppercase">Đang Phục Vụ / Xử Lý</div>
+                        <div class="fs-3 fw-bold text-warning" id="kpiServingOrders">0</div>
+                        <div class="text-muted small" style="font-size: 11px;" id="kpiUnpaidSubtext">Trong đó: <b>0</b> chưa thu tiền</div>
+                    </div>
+                    <div class="rounded-circle bg-warning bg-opacity-10 p-3 text-warning">
+                        <i class="fa-solid fa-fire-burner fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Đơn Hoàn Thành -->
+        <div class="col-lg-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-success h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-secondary small fw-bold text-uppercase">Đơn Hoàn Thành</div>
+                        <div class="fs-3 fw-bold text-success" id="kpiCompletedOrders">0</div>
+                        <div class="text-muted small" style="font-size: 11px;">Đã giao & hoàn tất</div>
+                    </div>
+                    <div class="rounded-circle bg-success bg-opacity-10 p-3 text-success">
+                        <i class="fa-solid fa-circle-check fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Đơn Hủy -->
+        <div class="col-lg-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-danger h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-secondary small fw-bold text-uppercase">Đơn Bị Hủy</div>
+                        <div class="fs-3 fw-bold text-danger" id="kpiCanceledOrders">0</div>
+                        <div class="text-muted small" style="font-size: 11px;">Hủy do khách/bếp</div>
+                    </div>
+                    <div class="rounded-circle bg-danger bg-opacity-10 p-3 text-danger">
+                        <i class="fa-solid fa-ban fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tổng Giá Trị Đã Xử Lý -->
+        <div class="col-lg-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-primary h-100">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-secondary small fw-bold text-uppercase">Tổng Giá Trị Đã Xử Lý</div>
+                        <div class="fs-3 fw-bold text-primary" id="kpiTotalRevenue">0 đ</div>
+                        <div class="text-muted small" style="font-size: 11px;" id="kpiRevenueSubtext">Tiền thu / Đơn hoàn tất</div>
+                    </div>
+                    <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary">
+                        <i class="fa-solid fa-coins fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KHU VỰC BIỂU ĐỒ THỐNG KÊ CHUYÊN NGHIỆP (TOGGLE COLLAPSIBLE) -->
+    <div id="quickChartsSection" class="card shadow-sm border-0 rounded-3 mb-3 bg-white p-3 d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <h6 class="fw-bold text-success m-0">
+                <i class="fa-solid fa-chart-column me-2"></i>Biểu Đồ Thống Kê Doanh Thu & Cơ Cấu Đơn Hàng
+            </h6>
+            <button type="button" class="btn btn-sm btn-light border text-secondary fw-bold" onclick="window.toggleChartsArea()">
+                <i class="fa-solid fa-xmark me-1"></i> Đóng biểu đồ
+            </button>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-7">
+                <div class="p-2 border rounded-3 bg-light">
+                    <div class="small fw-bold text-success mb-2"><i class="fa-solid fa-arrow-trend-up me-1"></i> Doanh Thu Theo Thời Gian (VNĐ)</div>
+                    <div style="height: 240px; position: relative;">
+                        <canvas id="quickChartRevenueTimeline"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div class="p-2 border rounded-3 bg-light">
+                    <div class="small fw-bold text-primary mb-2"><i class="fa-solid fa-chart-pie me-1"></i> Cơ Cấu Đơn Hàng (Đang phục vụ / Hoàn thành / Hủy)</div>
+                    <div style="height: 240px; position: relative;" class="d-flex justify-content-center">
+                        <canvas id="quickChartOrderStatus"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- THANH CHUYỂN TAB ĐƠN HÀNG & THỐNG KÊ (PHÂN QUYỀN TRUY CẬP) -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <ul class="nav nav-pills" id="ordersMainTabs">
+            <li class="nav-item me-2" id="tab-orders-list-item">
+                <button class="nav-link active rounded-pill fw-bold" id="tab-orders-list-btn" type="button" onclick="window.switchOrderTab('tab-orders-list')">
+                    <i class="fa-solid fa-list-check me-1"></i> Danh Sách Đơn Hàng
+                </button>
+            </li>
+            <li class="nav-item me-2" id="tab-orders-stats-item">
+                <button class="nav-link rounded-pill fw-bold" id="tab-orders-stats-btn" type="button" onclick="window.switchOrderTab('tab-orders-stats')">
+                    <i class="fa-solid fa-chart-line me-1"></i> Thống Kê Báo Cáo
+                </button>
+            </li>
+            <li class="nav-item" id="tab-orders-staff-item">
+                <button class="nav-link rounded-pill fw-bold" id="tab-orders-staff-btn" type="button" onclick="window.switchOrderTab('tab-orders-staff')">
+                    <i class="fa-solid fa-user-check me-1"></i> Nhật Ký & KPI Toàn Quán
+                </button>
+            </li>
+        </ul>
+
+        <!-- Nút Bật/Tắt Biểu Đồ Thống Kê Nhanh (Chỉ hiện khi có quyền xem báo cáo) -->
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" id="quickChartToggleBtn" onclick="window.toggleChartsArea()">
+            <i class="fa-solid fa-chart-pie me-1"></i> <span id="toggleChartBtnText">Xem Biểu Đồ Phân Tích</span>
+        </button>
+    </div>
+
+    <!-- KHU VỰC CÁC TAB -->
+    <div id="ordersTabsContent">
+        
+        <!-- TAB 1: DANH SÁCH ĐƠN HÀNG -->
+        <div class="tab-pane-order" id="tab-orders-list">
+            
+            <!-- BỘ LỌC ĐA NĂNG (THỜI GIAN, KHOẢNG NGÀY, TRẠNG THÁI, TÌM KIẾM) -->
+            <div class="card shadow-sm border-0 rounded-3 mb-3 bg-light">
+                <div class="card-body p-3">
+                    <div class="row g-2 align-items-end">
+                        <!-- Mốc thời gian -->
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <label class="form-label small fw-bold text-secondary mb-1">
+                                <i class="fa-solid fa-calendar-days me-1"></i> Thời gian:
+                            </label>
+                            <select class="form-select form-select-sm fw-bold text-success" id="filterTimeRange" onchange="window.handleTimeRangeChange()">
+                                <option value="TODAY" selected>Hôm nay</option>
+                                <option value="WEEK">Tuần này</option>
+                                <option value="MONTH">Tháng này</option>
+                                <option value="YEAR">Năm nay</option>
+                                <option value="CUSTOM">Khoảng ngày...</option>
+                                <option value="ALL">Tất cả thời gian</option>
+                            </select>
+                        </div>
+
+                        <!-- Từ ngày -->
+                        <div class="col-lg-2 col-md-4 col-6" id="dateFromContainer">
+                            <label class="form-label small fw-bold text-secondary mb-1">Từ ngày:</label>
+                            <input type="date" class="form-control form-control-sm" id="filterDateFrom" onchange="window.applyOrderFilters()">
+                        </div>
+
+                        <!-- Đến ngày -->
+                        <div class="col-lg-2 col-md-4 col-6" id="dateToContainer">
+                            <label class="form-label small fw-bold text-secondary mb-1">Đến ngày:</label>
+                            <input type="date" class="form-control form-control-sm" id="filterDateTo" onchange="window.applyOrderFilters()">
+                        </div>
+
+                        <!-- Lọc theo Trạng thái Đang phục vụ / Chưa thanh toán / Đã xử lý -->
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <label class="form-label small fw-bold text-secondary mb-1">
+                                <i class="fa-solid fa-filter me-1"></i> Trạng thái xử lý:
+                            </label>
+                            <select class="form-select form-select-sm" id="filterProcessStatus" onchange="window.applyOrderFilters()">
+                                <option value="ALL">Tất cả trạng thái</option>
+                                <option value="SERVING">🟡 Đang phục vụ / Bếp làm</option>
+                                <option value="UNPAID">💳 Chờ thanh toán (Thu sau)</option>
+                                <option value="PAID_COMPLETED">🟢 Đã thanh toán & Xong</option>
+                                <option value="CANCELED">🔴 Đơn đã hủy</option>
+                            </select>
+                        </div>
+
+                        <!-- Lọc theo Hình thức -->
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <label class="form-label small fw-bold text-secondary mb-1">
+                                <i class="fa-solid fa-utensils me-1"></i> Hình thức:
+                            </label>
+                            <select class="form-select form-select-sm" id="filterOrderType" onchange="window.applyOrderFilters()">
+                                <option value="ALL">Tất cả hình thức</option>
+                                <option value="DINE_IN">Ăn tại quán</option>
+                                <option value="TAKE_AWAY_SELF">Mang về</option>
+                            </select>
+                        </div>
+
+                        <!-- Tìm kiếm Số đơn, Bàn, Khách -->
+                        <div class="col-lg-2 col-md-4 col-12">
+                            <label class="form-label small fw-bold text-secondary mb-1">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i> Tìm kiếm:
+                            </label>
+                            <input type="text" class="form-control form-control-sm" id="filterSearchInput" placeholder="Số đơn, số bàn, khách..." oninput="window.applyOrderFilters()">
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                        <small class="text-muted" id="filterSummaryText">Đang hiển thị đơn hôm nay</small>
+                        <span class="badge bg-success fs-6" id="totalOrdersCount">0 đơn</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BẢNG DANH SÁCH ĐƠN HÀNG -->
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-body p-0">
+                    <!-- BẢNG DANH SÁCH ĐƠN HÀNG (ĐỒNG BỘ ĐỦ 10 CỘT) -->
+<div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" id="ordersMainTable">
+        <thead class="table-light text-secondary">
+            <tr>
+                <th style="width: 130px;">Mã Đơn</th>
+                <th style="width: 120px;">Loại Đơn / Bàn</th>
+                <th style="width: 120px;">Khách Hàng</th>
+                <th style="width: 140px;"><i class="fa-solid fa-user-tie me-1 text-success"></i>Nhân Viên Xử Lý</th>
+                <th>Món Đã Đặt</th>
+                <th class="text-center" style="width: 135px;">Thanh Toán & Thu Tiền</th>
+                <th class="text-center" style="width: 110px;">Trạng Thái</th>
+                <th style="width: 150px;">Ghi Chú & Lý Do Hủy</th>
+                <th class="text-end" style="width: 110px;">Tổng Tiền</th>
+                <th class="text-center" style="width: 120px;">Thời Gian</th>
+                <th class="text-center" style="width: 250px;">Thao Tác</th>
+            </tr>
+        </thead>
+        <tbody id="ordersTableBody">
+            <tr>
+                <td colspan="11" class="text-center py-4 text-muted">
+                    <i class="fa-solid fa-spinner fa-spin me-2"></i>Đang tải danh sách đơn hàng...
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+<!-- Cập nhật 2 nút Đóng trong Modal -->
+
+
+<button type="button" class="btn btn-secondary fw-bold" onclick="window.closeOrderHistoryModal()">Đóng</button>
+<!-- MODAL XEM LỊCH SỬ CHỈNH SỬA ĐƠN HÀNG -->
+<div class="modal fade" id="orderHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fa-solid fa-clock-rotate-left me-2"></i>Lịch Sử Chỉnh Sửa Đơn Hàng <span id="historyOrderCodeTitle" class="badge bg-warning text-dark ms-2"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" onclick="window.closeOrderHistoryModal()" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle table-striped mb-0">
+                        <thead class="table-dark small">
+    <tr>
+        <th style="width: 105px; white-space: nowrap;" class="text-center">Thời Gian</th>
+        <th style="width: 75px; white-space: nowrap;" class="text-center">Người Sửa</th>
+        <th class="text-center">Nội Dung Cũ</th>
+        <th class="text-center">Nội Dung Mới</th>
+    </tr>
+</thead>
+                        <tbody id="orderHistoryTableBody" class="small">
+                            <tr>
+                                <td colspan="4" class="text-center py-3 text-muted">Đang tải lịch sử chỉnh sửa...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer bg-light p-2">
+                <button type="button" class="btn btn-secondary fw-bold" onclick="window.closeOrderHistoryModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: THỐNG KÊ BÁO CÁO -->
+        <!-- TAB 2: THỐNG KÊ BÁO CÁO -->
+<div class="tab-pane-order d-none" id="tab-orders-stats">
+    
+    <!-- BỘ LỌC THỜI GIAN RIÊNG CHO TAB THỐNG KÊ -->
+    <div class="card shadow-sm border-0 rounded-3 mb-3 bg-light">
+        <div class="card-body p-3">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-4 col-12">
+                    <label class="form-label small fw-bold text-secondary mb-1">
+                        <i class="fa-solid fa-calendar-days me-1"></i> Mốc thời gian thống kê:
+                    </label>
+                    <select class="form-select form-select-sm fw-bold text-success" id="statFilterTimeRange" onchange="window.renderOrderStatistics()">
+                        <option value="TODAY" selected>Hôm nay</option>
+                        <option value="WEEK">Tuần này</option>
+                        <option value="MONTH">Tháng này</option>
+                        <option value="YEAR">Năm nay</option>
+                        <option value="ALL">Tất cả thời gian</option>
+                    </select>
+                </div>
+                <div class="col-md-8 col-12 text-end pt-3">
+                    <span class="badge bg-success fs-6" id="statRangeLabel">Thống kê: Hôm nay</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KHU VỰC THỐNG KÊ TỔNG QUAN -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center bg-white border-start border-4 border-success">
+                <div class="text-muted small">Doanh Thu</div>
+                <div class="fs-4 fw-bold text-success" id="statTotalRevenue">0 đ</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center bg-white border-start border-4 border-primary">
+                <div class="text-muted small">Tổng Số Đơn</div>
+                <div class="fs-4 fw-bold text-primary" id="statTotalOrders">0</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center bg-white border-start border-4 border-danger">
+                <div class="text-muted small">Đơn Hủy</div>
+                <div class="fs-4 fw-bold text-danger" id="statCanceledOrders">0</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3 text-center bg-white border-start border-4 border-warning">
+                <div class="text-muted small">Ăn Tại Quán / Mang Về</div>
+                <div class="fs-4 fw-bold text-dark" id="statDineVsTakeaway">0 / 0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KHU VỰC BIỂU ĐỒ CHART.JS -->
+    <div class="row g-3">
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm rounded-3 p-3">
+                <h6 class="fw-bold text-success mb-3"><i class="fa-solid fa-chart-column me-2"></i>Biểu Đồ Doanh Thu Theo Thời Gian</h6>
+                <div style="height: 280px; position: relative;">
+                    <canvas id="chartRevenueTimeline"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-3 p-3">
+                <h6 class="fw-bold text-success mb-3"><i class="fa-solid fa-chart-pie me-2"></i>Hình Thức Ăn Tại Quán / Mang Về</h6>
+                <div style="height: 280px; position: relative;" class="d-flex justify-content-center">
+                    <canvas id="chartOrderTypeRatio"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3">
+                <h6 class="fw-bold text-danger mb-3"><i class="fa-solid fa-ban me-2"></i>Thống Kê Lý Do Hủy Đơn Theo Bộ Phận</h6>
+                <div style="height: 250px; position: relative;">
+                    <canvas id="chartCancelReasons"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-3 p-3">
+                <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-user-check me-2"></i>Số Đơn Xử Lý Theo Nhân Viên</h6>
+                <div style="height: 250px; position: relative;">
+                    <canvas id="chartStaffPerformance"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 3: NHẬT KÝ & KPI NHÂN VIÊN -->
+<div class="tab-pane-order d-none" id="tab-orders-staff">
+    <!-- Bộ lọc thời gian cho KPI -->
+    <div class="card shadow-sm border-0 rounded-3 mb-3 bg-light">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fw-bold text-secondary"><i class="fa-solid fa-filter me-1"></i> Mốc thời gian KPI:</span>
+                    <select class="form-select form-select-sm fw-bold text-success" id="kpiFilterTimeRange" style="width: 180px;" onchange="window.loadStaffKPIData()">
+                        <option value="TODAY" selected>Hôm nay</option>
+                        <option value="WEEK">7 ngày qua</option>
+                        <option value="MONTH">Tháng này</option>
+                        <option value="ALL">Toàn bộ thời gian</option>
+                    </select>
+                </div>
+                <button class="btn btn-sm btn-outline-success rounded-pill px-3 fw-bold" onclick="window.loadStaffKPIData()">
+                    <i class="fa-solid fa-rotate me-1"></i> Tải Lại KPI
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BẢNG TỔNG HỢP KPI TỪNG NHÂN VIÊN -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+            <h5 class="m-0 text-success fw-bold fs-6">
+                <i class="fa-solid fa-award me-2"></i>Bảng Tổng Hợp Chỉ Tiêu & KPI Nhân Viên (Bếp, Bồi Bàn, Thu Ngân)
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-secondary">
+                        <tr>
+                            <th style="width: 180px;">Nhân Viên (Tài Khoản)</th>
+                            <th style="width: 120px;">Vai Trò</th>
+                            <th class="text-center" style="width: 110px;">👨‍🍳 Đơn Bếp Nấu</th>
+                            <th class="text-center" style="width: 110px;">💁 Đơn Bồi Trả</th>
+                            <th class="text-center" style="width: 110px;">📝 Đơn Đã Tạo</th>
+                            <th class="text-center" style="width: 110px;">💰 Lượt Thu Tiền</th>
+                            <th class="text-end text-success fw-bold" style="width: 150px;">💵 Tổng Tiền Đã Thu</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kpiSummaryTableBody">
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                <i class="fa-solid fa-spinner fa-spin me-2"></i>Đang tải dữ liệu KPI...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- BẢNG NHẬT KÝ CHI TIẾT CÁC THAO TÁC -->
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 border-bottom">
+            <h5 class="m-0 text-primary fw-bold fs-6">
+                <i class="fa-solid fa-clock-rotate-left me-2"></i>Nhật Ký Thao Tác Chi Tiết (Audit Trail & Log Phục Vụ)
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-secondary">
+                        <tr>
+                            <th style="width: 140px;">Thời Gian</th>
+                            <th style="width: 160px;">Nhân Viên</th>
+                            <th style="width: 110px;">Vai Trò</th>
+                            <th style="width: 160px;">Hành Động</th>
+                            <th style="width: 140px;">Mã Đơn / Bàn</th>
+                            <th>Nội Dung Chi Tiết / Số Tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kpiLogsTableBody">
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                <i class="fa-solid fa-spinner fa-spin me-2"></i>Đang tải nhật ký thao tác...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+    </div>
+</div>
+
+<!-- MODAL CHỌN LÝ DO HỦY ĐƠN HÀNG -->
+<!-- MODAL HỦY ĐƠN HÀNG CHUYÊN NGHIỆP -->
+<div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-ban me-2"></i>Xác Nhận Hủy Đơn Hàng</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="modalCancelOrderId">
+                
+                <!-- BỘ PHẬN TỰ ĐỘNG NHẬN DIỆN FROM ACCOUNT -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Bộ phận ghi nhận hủy (Tự động):</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light"><i class="fa-solid fa-user-shield text-danger"></i></span>
+                        <input type="text" class="form-control fw-bold text-danger bg-light" id="modalCancelRoleDisplay" readonly value="Bếp">
+                    </div>
+                </div>
+
+                <!-- LỌC CHỌN LÝ DO HỦY CÓ SẴN (TRÁNH GÕ TAY) -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-dark">Chọn lý do hủy mẫu:</label>
+                    <select class="form-select" id="modalCancelReasonSelect" onchange="window.onCancelReasonSelectChange(this)">
+                        <option value="Hết nguyên liệu món này">Hết nguyên liệu món này (Bếp)</option>
+                        <option value="Khách đổi ý không muốn ăn nữa">Khách đổi ý không muốn ăn nữa (Khách)</option>
+                        <option value="Khách vội đi không chờ được">Khách vội đi không chờ được (Khách)</option>
+                        <option value="Nhập sai món / Sai số bàn">Nhập sai món / Sai số bàn (Thu ngân)</option>
+                        <option value="Lý do khác">Lý do khác...</option>
+                    </select>
+                </div>
+
+                <!-- GHI CHÚ BỔ SUNG -->
+                <div class="mb-2">
+                    <label class="form-label small fw-bold text-dark">Ghi chú chi tiết lý do hủy:</label>
+                    <textarea class="form-control" id="modalCancelNoteInput" rows="2" placeholder="Nhập chi tiết nếu có..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Hủy bỏ</button>
+                <button type="button" class="btn btn-danger fw-bold" onclick="window.confirmCancelOrderWithReason()">
+                    <i class="fa-solid fa-check me-1"></i> Xác Nhận Hủy
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL THANH TOÁN SAU / THU TIỀN TẠI BÀN -->
+<div class="modal fade" id="quickPaymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold" id="quickPaymentModalTitle">
+                    <i class="fa-solid fa-credit-card me-2"></i>Thanh Toán Thu Tiền Tại Bàn
+                </h5>
+                <button type="button" class="btn-close btn-close-white" onclick="window.closeQuickPaymentModal()" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="quickPayOrderCode">
+                <input type="hidden" id="quickPayTotalAmount">
+
+                <!-- Thông tin bàn & mã đơn -->
+                <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-light rounded-3 border">
+                    <div>
+                        <div class="fw-bold fs-5 text-dark" id="quickPayTableNumber">Bàn 01</div>
+                        <div class="small text-muted" id="quickPayOrderCodeDisplay">Mã: #CHAY-123456</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="small text-secondary fw-semibold">Tổng Tiền Cần Thu:</div>
+                        <div class="fs-4 fw-bold text-success" id="quickPayTotalDisplay">0 đ</div>
+                    </div>
+                </div>
+
+                <!-- Tóm tắt danh sách món -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary mb-1">
+                        <i class="fa-solid fa-list-check me-1"></i> Món ăn đã phục vụ:
+                    </label>
+                    <div class="p-2 border rounded-3 bg-white" style="max-height: 140px; overflow-y: auto;" id="quickPayItemsList">
+                        <!-- Danh sách món render động -->
+                    </div>
+                </div>
+
+                <!-- Lựa chọn hình thức thu tiền -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary mb-2">
+                        <i class="fa-solid fa-wallet me-1"></i> Phương thức thu tiền:
+                    </label>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <input type="radio" class="btn-check" name="quickPayMethod" id="quickPayMethodCash" value="CASH" checked onchange="window.handleQuickPayMethodChange('CASH')">
+                            <label class="btn btn-outline-success w-100 py-2 fw-bold text-center small" for="quickPayMethodCash">
+                                <i class="fa-solid fa-money-bill-wave me-1"></i> Tiền Mặt
+                            </label>
+                        </div>
+                        <div class="col-4">
+                            <input type="radio" class="btn-check" name="quickPayMethod" id="quickPayMethodQR" value="BANK_TRANSFER" onchange="window.handleQuickPayMethodChange('BANK_TRANSFER')">
+                            <label class="btn btn-outline-primary w-100 py-2 fw-bold text-center small" for="quickPayMethodQR">
+                                <i class="fa-solid fa-qrcode me-1"></i> QR Bank
+                            </label>
+                        </div>
+                        <div class="col-4">
+                            <input type="radio" class="btn-check" name="quickPayMethod" id="quickPayMethodMomo" value="MOMO" onchange="window.handleQuickPayMethodChange('MOMO')">
+                            <label class="btn btn-outline-danger w-100 py-2 fw-bold text-center small" for="quickPayMethodMomo" style="border-color: #ae2070; color: #ae2070;">
+                                <i class="fa-solid fa-mobile-screen me-1"></i> Ví MoMo
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Khung mã QR (Hiện khi chọn QR) -->
+                <div id="quickPayQrArea" class="p-3 border rounded-3 bg-light text-center mb-3 d-none">
+                    <div class="small fw-bold text-primary mb-2">Đưa mã QR cho khách quét tại bàn:</div>
+                    <div id="quickPayQrImageContainer" class="d-flex justify-content-center mb-2">
+                        <!-- Ảnh QR hoặc VietQR Canvas -->
+                    </div>
+                    <div class="small text-muted" id="quickPayBankInfoText">Quét mã VietQR chuyển khoản nhanh 24/7</div>
+                </div>
+
+                <!-- Người thu tiền hiện tại -->
+                <div class="p-2 bg-light rounded text-center small text-secondary">
+                    <i class="fa-solid fa-user-check text-success me-1"></i> Người thu tiền ghi nhận: <b id="quickPayCollectorName" class="text-dark">Bồi bàn</b>
+                </div>
+            </div>
+
+            <div class="modal-footer bg-light p-3 d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary fw-bold" onclick="window.printBillFromQuickPay()">
+                    <i class="fa-solid fa-print me-1"></i> In Tạm Tính
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-light border fw-bold" onclick="window.closeQuickPaymentModal()">Đóng</button>
+                    <button type="button" class="btn btn-success fw-bold px-3 shadow-sm" id="btnConfirmQuickPay" onclick="window.submitQuickPayment()">
+                        <i class="fa-solid fa-check me-1"></i> Xác Nhận Đã Thu Tiền
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- KÍCH HOẠT VÀ TẢI SCRIPT ORDERS.JS KHI TRANG LOAD THÔNG QUA ROUTER SPA -->
+<script>
+    if (typeof window.initOrders === 'function') {
+        window.initOrders();
+    } else {
+        const script = document.createElement('script');
+        script.src = '/js/orders.js?v=' + Date.now();
+        script.onload = function() {
+            if (typeof window.initOrders === 'function') window.initOrders();
+        };
+        document.head.appendChild(script);
+    }
+</script>
+<!-- THÊM ĐOẠN SCRIPT NÀY Ở CUỐI FILE views/orders.html -->
+<script>
+    (function() {
+        // Xóa script orders.js cũ nếu có
+        const oldScript = document.getElementById('orders-js-script');
+        if (oldScript) oldScript.remove();
+
+        // Ép nạp mới file orders.js bằng timestamp chống cache
+        const script = document.createElement('script');
+        script.id = 'orders-js-script';
+        script.src = '/js/orders.js?v=' + Date.now();
+        script.onload = function() {
+            if (typeof window.initOrders === 'function') {
+                window.initOrders();
+            }
+        };
+        document.head.appendChild(script);
+    })();
+</script>
+
+<!-- NHÚNG THƯ VIỆN CHART.JS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

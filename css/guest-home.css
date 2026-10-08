@@ -1,0 +1,444 @@
+/* css/guest-home.css - Tối ưu giao diện Khách Hàng Trang Chủ Chuẩn Hoá Mobile & Tablet */
+
+.guest-home-container {
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 10px 15px 30px 15px;
+    font-family: inherit;
+}
+
+/* Đảm bảo tất cả container trên trang chủ gọn gàng, tự động co dãn theo nội dung, không bị kéo dãn thừa */
+.guest-home-container .container,
+.guest-features-section .container,
+.guest-store-map-section .container,
+.guest-dishes-section .container,
+.guest-prepaid-section .container,
+.guest-member-lookup-section .container,
+.guest-info-section .container {
+    min-height: auto !important;
+    height: auto !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.guest-features-section {
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.guest-store-map-section {
+    margin-top: 0 !important;
+    margin-bottom: 14px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* 1. HERO SLIDER CAROUSEL */
+.guest-hero-section {
+    margin-bottom: 12px;
+}
+
+.guest-hero-slide {
+    height: 380px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+}
+
+.guest-hero-slide::before {
+    display: none !important;
+}
+
+.guest-hero-slide .container {
+    position: relative;
+    z-index: 2;
+}
+
+.guest-slide-title {
+    font-weight: 850;
+    line-height: 1.2;
+    color: #ffffff;
+    text-shadow: 0 3px 12px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.95);
+}
+
+.guest-slide-desc {
+    text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+    line-height: 1.5;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    padding: 10px 18px;
+    border-radius: 12px;
+    display: inline-block;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.guest-slide-badge span {
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.carousel-indicators [data-bs-target] {
+    width: 28px;
+    height: 6px;
+    border-radius: 3px;
+    margin: 0 4px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.carousel-indicators .active {
+    width: 44px;
+    background-color: var(--primary-color, #2e7d32);
+}
+
+/* 2. FEATURE CARDS (ĐỒNG BỘ MÀU TỪ QUẢN LÝ HỆ THỐNG) */
+.feature-card {
+    background-color: var(--feature-card-bg, #ffffff) !important;
+    border: 1.5px solid var(--feature-card-border, #e2e8f0) !important;
+    border-radius: 18px !important;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
+}
+
+.feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12) !important;
+}
+
+.feature-card h6 {
+    color: var(--feature-card-text, #1a202c) !important;
+    transition: color 0.2s ease;
+}
+
+.feature-card small {
+    color: var(--feature-card-desc, #718096) !important;
+    transition: color 0.2s ease;
+}
+
+.feature-card .feature-icon {
+    width: 52px;
+    height: 52px;
+    color: var(--feature-card-icon, #2e7d32) !important;
+    background: var(--feature-card-icon-bg, rgba(46, 125, 50, 0.12)) !important;
+    font-size: 22px;
+    transition: all 0.2s ease;
+}
+
+/* 3. DISH SHOWCASE CARDS */
+.guest-dish-card {
+    border-radius: 18px;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #edf2f7;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.guest-dish-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 14px 28px rgba(0,0,0,0.12);
+}
+
+.guest-dish-img-wrap {
+    position: relative;
+    width: 100%;
+    height: 190px;
+    overflow: hidden;
+    background: #f7fafc;
+}
+
+.guest-dish-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+
+.guest-dish-card:hover .guest-dish-img-wrap img {
+    transform: scale(1.08);
+}
+
+.guest-dish-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 2;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+.guest-dish-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.guest-dish-name {
+    font-size: 15.5px;
+    font-weight: 700;
+    color: #1a202c;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.guest-dish-desc {
+    font-size: 12.5px;
+    color: #718096;
+    margin-bottom: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+    min-height: 35px;
+}
+
+.guest-dish-footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #edf2f7;
+}
+
+.guest-dish-price {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--primary-color, #2e7d32);
+}
+
+.guest-add-cart-btn {
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 14px;
+    background-color: var(--primary-color, #2e7d32);
+    color: #ffffff;
+    border: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.guest-add-cart-btn:hover {
+    background-color: var(--primary-hover, #1b5e20);
+    transform: scale(1.04);
+}
+
+/* Category Filter Pills */
+.guest-cat-pill {
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #4a5568;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.guest-cat-pill:hover,
+.guest-cat-pill.active {
+    background: var(--primary-color, #2e7d32);
+    color: #ffffff;
+    border-color: var(--primary-color, #2e7d32);
+    box-shadow: 0 2px 8px rgba(46, 125, 50, 0.3);
+}
+
+/* 4. CHUẨN HOÁ CHO TABLET VÀ ĐIỆN THOẠI (RESPONSIVE TOÀN DIỆN) */
+@media (max-width: 1200px) {
+    .guest-hero-slide {
+        height: 400px;
+    }
+}
+
+@media (max-width: 992px) {
+    .guest-hero-slide {
+        height: 360px;
+    }
+    .guest-slide-title {
+        font-size: 2rem !important;
+    }
+    .guest-slide-desc {
+        font-size: 0.95rem;
+    }
+    .guest-dish-img-wrap {
+        height: 170px;
+    }
+}
+
+@media (max-width: 768px) {
+    .guest-home-container {
+        padding: 5px 10px 60px 10px;
+    }
+    .guest-hero-slide {
+        height: 310px;
+        border-radius: 16px;
+    }
+    .guest-hero-slide::before {
+        border-radius: 16px;
+    }
+    .guest-slide-title {
+        font-size: 1.55rem !important;
+        margin-bottom: 8px !important;
+    }
+    .guest-slide-desc {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        font-size: 0.85rem;
+        margin-bottom: 12px !important;
+    }
+    .guest-slide-price {
+        font-size: 1.25rem !important;
+    }
+    .guest-dish-img-wrap {
+        height: 155px;
+    }
+    .guest-dish-body {
+        padding: 10px 12px;
+    }
+    .guest-dish-name {
+        font-size: 14.5px;
+    }
+    .guest-dish-price {
+        font-size: 15px;
+    }
+    .guest-add-cart-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+    .feature-card {
+        padding: 12px 8px !important;
+        border-radius: 14px !important;
+    }
+    .feature-card .feature-icon {
+        width: 44px !important;
+        height: 44px !important;
+        font-size: 18px !important;
+    }
+    .feature-card h6 {
+        font-size: 13px !important;
+    }
+    .feature-card small {
+        font-size: 11px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .guest-hero-slide {
+        height: 270px;
+    }
+    .guest-slide-title {
+        font-size: 1.3rem !important;
+    }
+    .guest-hero-slide .btn {
+        font-size: 12px !important;
+        padding: 6px 12px !important;
+    }
+}
+
+/* 5. TỐI ƯU ĐẶC BIỆT KHI QUAY NGANG ĐIỆN THOẠI (LANDSCAPE MODE: CHIỀU CAO < 520px) */
+@media (max-height: 520px) and (orientation: landscape) {
+    .guest-home-container {
+        padding: 4px 12px 40px 12px !important;
+    }
+    .guest-hero-slide {
+        height: 210px !important;
+        border-radius: 12px !important;
+    }
+    .guest-hero-slide::before {
+        border-radius: 12px !important;
+    }
+    .guest-hero-slide .container {
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+    }
+    .guest-slide-badge {
+        margin-bottom: 3px !important;
+    }
+    .guest-slide-badge span {
+        font-size: 10px !important;
+        padding: 2px 8px !important;
+    }
+    .guest-slide-title {
+        font-size: 1.25rem !important;
+        margin-bottom: 4px !important;
+        line-height: 1.2 !important;
+    }
+    .guest-slide-desc {
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        font-size: 0.8rem !important;
+        margin-bottom: 6px !important;
+    }
+    .guest-slide-price {
+        font-size: 1.1rem !important;
+    }
+    .guest-hero-slide .btn {
+        padding: 3px 10px !important;
+        font-size: 11px !important;
+    }
+    .guest-features-section {
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    .feature-card {
+        padding: 8px 6px !important;
+        border-radius: 12px !important;
+    }
+    .feature-card .feature-icon {
+        width: 34px !important;
+        height: 34px !important;
+        font-size: 15px !important;
+        margin-bottom: 4px !important;
+    }
+    .feature-card h6 {
+        font-size: 11.5px !important;
+        margin-bottom: 2px !important;
+    }
+    .feature-card small {
+        font-size: 9.5px !important;
+        line-height: 1.2 !important;
+        display: block;
+    }
+    .guest-dish-img-wrap {
+        height: 130px !important;
+    }
+    .guest-dish-body {
+        padding: 8px 10px !important;
+    }
+    .guest-dish-name {
+        font-size: 13.5px !important;
+    }
+    .guest-dish-desc {
+        display: none !important; /* Ẩn mô tả dài khi quay ngang để tiết kiệm chiều cao */
+    }
+}
+

@@ -1,0 +1,471 @@
+<style>
+    /* 🌟 1. ẨN HOÀN TOÀN THANH MENU TỔNG KHI BẬT KDS FULLSCREEN */
+    body.kitchen-mode .navbar,
+    body.kitchen-mode nav,
+    body.kitchen-mode header,
+    body.kitchen-mode .main-header,
+    body.kitchen-mode .sidebar,
+    body.kitchen-mode .container-fluid > .row > .col-12 > .navbar,
+    body.kitchen-mode div:has(> .navbar-nav),
+    body.kitchen-mode .bg-white.border-bottom.px-3 {
+        display: none !important;
+    }
+
+    /* 🌟 2. ẨN THANH ĐIỀU KHIỂN RIÊNG CỦA BẾP KHI FULLSCREEN */
+    body.kitchen-mode #kitchenHeaderBar {
+        display: none !important;
+    }
+
+    /* 🌟 3. NỀN TRẮNG SÁNG & KHÔNG GIAN RỘNG CHO MÀN HÌNH BẾP */
+    body.kitchen-mode {
+        background-color: #f1f5f9 !important;
+    }
+    body.kitchen-mode .container-fluid {
+        padding: 10px !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+        min-height: 100vh;
+        background-color: #f1f5f9 !important;
+    }
+
+    /* 🌟 4. THANH ĐIỀU KHIỂN BẾP HIỆN ĐẠI (SLEEK & BALANCED HEADER) */
+    .kds-header-bar {
+        background: #1e293b !important;
+        color: #ffffff;
+        border-radius: 12px;
+        padding: 8px 12px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .kds-nav-btn {
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        padding: 5px 12px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .kds-tool-btn {
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        padding: 5px 10px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .kds-density-btn {
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        padding: 4px 8px !important;
+    }
+
+    /* 🌟 5. GIAO DIỆN THẺ ĐƠN CHUẨN KDS */
+    .kds-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+        background: #ffffff !important;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .kds-card:hover {
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+    }
+    
+    .kds-header-pending { 
+        background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important; 
+        color: white !important; 
+    }
+    
+    .kds-header-edited { 
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important; 
+        color: #000000 !important; 
+    }
+
+    .kds-header-cooking { 
+        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important; 
+        color: white !important; 
+    }
+
+    .kds-btn-accept {
+        background-color: #ffffff !important;
+        color: #16a34a !important;
+        border: none !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
+        font-weight: 700 !important;
+        font-size: 11.5px !important;
+        padding: 3px 8px !important;
+        border-radius: 20px !important;
+    }
+    .kds-btn-accept:hover {
+        background-color: #dcfce7 !important;
+        color: #15803d !important;
+    }
+
+    .kds-btn-cancel {
+        font-size: 12.5px !important;
+        font-weight: 700 !important;
+        padding: 6px 12px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
+    }
+
+    .kds-btn-done {
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        padding: 6px 14px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
+        background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+        border: none !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3) !important;
+    }
+    .kds-btn-done:hover {
+        background: linear-gradient(135deg, #15803d 0%, #166534 100%) !important;
+        color: #ffffff !important;
+    }
+
+    .kds-item-row { 
+        padding: 6px 8px; 
+        border-bottom: 1px dashed #e2e8f0; 
+        font-size: 13px; 
+    }
+    .kds-item-qty { 
+        background: #ecfdf5 !important; 
+        color: #047857 !important; 
+        border: 1.5px solid #a7f3d0 !important; 
+        font-weight: 900 !important; 
+        padding: 2px 8px !important; 
+        border-radius: 12px !important; 
+        font-size: 13.5px !important; 
+        display: inline-block;
+        min-width: 40px;
+        text-align: center;
+    }
+    .kds-item-qty.qty-add-more {
+        background: #fee2e2 !important;
+        color: #b91c1c !important;
+        border: 1.5px solid #fca5a5 !important;
+    }
+
+    /* 🌟 6. BỐ CỤC LƯỚI THẺ BẾP: 4 ĐƠN (2 CỘT), 6 ĐƠN (3 CỘT), 8 ĐƠN (4 CỘT) */
+    #kitchenCardsGrid {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-content: flex-start !important;
+        justify-content: flex-start !important;
+        align-items: stretch !important;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 30px;
+        scroll-behavior: smooth;
+    }
+    body.kitchen-mode #kitchenCardsGrid {
+        max-height: calc(100vh - 15px) !important;
+    }
+
+    .kds-col {
+        padding: 6px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 4 Đơn: 2 Cột (50%) */
+    .kitchen-grid-4 > .kds-col {
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+        width: 50% !important;
+    }
+
+    /* 6 Đơn: 3 Cột (33.333333%) */
+    .kitchen-grid-6 > .kds-col {
+        flex: 0 0 33.333333% !important;
+        max-width: 33.333333% !important;
+        width: 33.333333% !important;
+    }
+
+    /* 8 Đơn: 4 Cột (25%) */
+    .kitchen-grid-8 > .kds-col {
+        flex: 0 0 25% !important;
+        max-width: 25% !important;
+        width: 25% !important;
+    }
+
+    /* Tối ưu hóa cho Tablet (iPad, Android Tablet: 576px - 991px) */
+    @media (max-width: 991.98px) {
+        .kds-title-text {
+            font-size: 14px !important;
+        }
+        .kitchen-grid-4 > .kds-col,
+        .kitchen-grid-6 > .kds-col,
+        .kitchen-grid-8 > .kds-col {
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
+            width: 50% !important;
+        }
+        .kds-nav-btn {
+            font-size: 12px !important;
+            padding: 4px 8px !important;
+        }
+        .kds-tool-btn {
+            font-size: 11px !important;
+            padding: 4px 6px !important;
+        }
+    }
+
+    /* Tối ưu hóa cho Điện Thoại (< 576px) */
+    @media (max-width: 575.98px) {
+        .kds-header-bar {
+            padding: 6px 8px !important;
+            gap: 6px !important;
+        }
+        .kds-title-block {
+            display: none !important;
+        }
+        .kitchen-grid-4 > .kds-col,
+        .kitchen-grid-6 > .kds-col,
+        .kitchen-grid-8 > .kds-col {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        .kds-nav-btn {
+            font-size: 11.5px !important;
+            padding: 4px 8px !important;
+        }
+        .kds-tool-label {
+            display: none !important;
+        }
+        .kds-density-group {
+            display: none !important;
+        }
+        #kdsFullscreenDensityBar #fsCol4Btn,
+        #kdsFullscreenDensityBar #fsCol6Btn,
+        #kdsFullscreenDensityBar #fsCol8Btn {
+            display: none !important;
+        }
+        #kdsFullscreenDensityBar {
+            bottom: 12px !important;
+            right: 12px !important;
+            padding: 0 !important;
+        }
+    }
+</style>
+
+<div class="container-fluid py-2">
+    <!-- Header Màn hình Bếp KDS Tinh Gọn, Cân Đối & Đẹp Mắt -->
+    <div class="kds-header-bar mb-2 d-flex justify-content-between align-items-center flex-wrap gap-2" id="kitchenHeaderBar">
+        <!-- Cụm bên trái: Tiêu đề Bếp & Nhóm Tabs -->
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="d-flex align-items-center gap-2 me-1 kds-title-block">
+                <span class="fs-5 text-warning">🍳</span>
+                <span class="fw-bold text-white kds-title-text" style="font-size: 15px; letter-spacing: 0.3px;">BẾP KDS</span>
+                <span class="badge bg-danger text-white rounded-pill px-2 py-1" style="font-size: 9.5px;">LIVE</span>
+            </div>
+
+            <!-- Nhóm Tabs Chức Năng Bếp -->
+            <div class="d-inline-flex bg-black bg-opacity-40 p-1 rounded-3 gap-1 border border-white border-opacity-10" role="group">
+                <button type="button" class="btn btn-warning active kds-nav-btn" id="btnTabPending" onclick="switchKitchenTab('PENDING')">
+                    <i class="fa-solid fa-fire"></i>
+                    <span>Chờ Nấu</span>
+                    <span class="badge bg-danger text-white rounded-pill px-2" id="kitchenPendingCount" style="font-size: 11px;">0</span>
+                </button>
+                <button type="button" class="btn btn-outline-light text-white-50 kds-nav-btn border-0" id="btnTabHistory" onclick="switchKitchenTab('HISTORY')">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>Lịch Sử</span>
+                </button>
+                <button type="button" class="btn btn-outline-light text-white-50 kds-nav-btn border-0" id="btnTabMyLogs" onclick="switchKitchenTab('MY_LOGS')">
+                    <i class="fa-solid fa-clipboard-user"></i>
+                    <span>Của Tôi</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Cụm bên phải: Công Cụ & Mật Độ Thẻ Đơn -->
+        <div class="d-flex align-items-center gap-1 flex-wrap">
+            <!-- Bộ chọn mật độ thẻ đơn: 2x2, 3x2, 4x2 -->
+            <div class="btn-group btn-group-sm bg-black bg-opacity-40 p-1 rounded-3 border border-white border-opacity-10 kds-density-group" role="group" title="Mật độ hiển thị thẻ đơn trên màn hình">
+                <button type="button" class="btn btn-warning text-dark kds-density-btn active rounded-2" id="kdsCol4Btn" onclick="window.setKitchenGridLayout(4)" title="4 thẻ (2 cột x 2 dòng)">2x2</button>
+                <button type="button" class="btn btn-outline-light text-white-50 kds-density-btn border-0 rounded-2" id="kdsCol6Btn" onclick="window.setKitchenGridLayout(6)" title="6 thẻ (3 cột x 2 dòng)">3x2</button>
+                <button type="button" class="btn btn-outline-light text-white-50 kds-density-btn border-0 rounded-2" id="kdsCol8Btn" onclick="window.setKitchenGridLayout(8)" title="8 thẻ (4 cột x 2 dòng)">4x2</button>
+            </div>
+
+            <!-- Nút Bật Chuông iPhone / Push Notification -->
+            <button class="btn btn-outline-warning text-warning kds-tool-btn border-0 bg-black bg-opacity-30" id="btnRequestIOSNoti" onclick="requestIOSNotificationPermission()" title="Bật thông báo chuông cho iPhone / iPad">
+                <i class="fa-solid fa-bell"></i>
+                <span class="kds-tool-label ms-1">Chuông</span>
+            </button>
+
+            <!-- Nút Bật/Tắt Âm Thanh -->
+            <button class="btn btn-outline-light text-white-50 kds-tool-btn border-0 bg-black bg-opacity-30" onclick="toggleMuteSound()" title="Bật / Tắt âm thanh thông báo đơn mới">
+                <i class="fa-solid fa-volume-high text-white" id="soundIcon"></i>
+                <span class="kds-tool-label ms-1">Âm thanh</span>
+            </button>
+
+            <!-- Nút Toàn Màn Hình (Fullscreen) -->
+            <button class="btn btn-outline-light text-white-50 kds-tool-btn border-0 bg-black bg-opacity-30" onclick="toggleKitchenFullscreen()" title="Bật / Tắt Toàn Màn Hình Tối Giản">
+                <i class="fa-solid fa-expand text-white"></i>
+                <span class="kds-tool-label ms-1">Toàn cảnh</span>
+            </button>
+
+            <!-- Nút Làm Mới -->
+            <button class="btn btn-warning text-dark fw-bold kds-tool-btn" onclick="refreshCurrentKitchenView()" title="Tải lại dữ liệu bếp mới nhất">
+                <i class="fa-solid fa-rotate"></i>
+                <span class="kds-tool-label ms-1">Làm mới</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Thanh chuyển mật độ nổi khi bật Fullscreen -->
+    <div id="kdsFullscreenDensityBar" class="d-none position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
+        <div class="btn-group shadow-lg rounded-pill overflow-hidden bg-dark border border-warning p-1">
+            <button class="btn btn-sm btn-dark text-warning fw-bold px-3 py-1" onclick="window.setKitchenGridLayout(4)" id="fsCol4Btn" title="4 thẻ: 2 cột x 2 dòng">2x2</button>
+            <button class="btn btn-sm btn-dark text-warning fw-bold px-3 py-1" onclick="window.setKitchenGridLayout(6)" id="fsCol6Btn" title="6 thẻ: 3 cột x 2 dòng">3x2</button>
+            <button class="btn btn-sm btn-dark text-warning fw-bold px-3 py-1" onclick="window.setKitchenGridLayout(8)" id="fsCol8Btn" title="8 thẻ: 4 cột x 2 dòng">4x2</button>
+            <button class="btn btn-sm btn-outline-light rounded-pill px-2 ms-2" onclick="toggleKitchenFullscreen()" title="Thoát toàn màn hình"><i class="fa-solid fa-compress me-1"></i>Thoát</button>
+        </div>
+    </div>
+
+    <!-- BANNER BẬT ÂM THANH BÁO BẾP KHI TRÌNH DUYỆT / IPAD / TIVI BỊ KHÓA AUTOPLAY -->
+    <div id="kitchenAudioUnlockBanner" class="alert alert-warning d-flex align-items-center justify-content-between p-2 px-3 mb-2 rounded-3 shadow-sm border-warning border-2" style="cursor: pointer; display: none;" onclick="window.unlockKitchenAudioFromBanner()">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-bell fa-shake text-danger fs-5"></i>
+            <div>
+                <b class="text-dark">Âm thanh chuông báo Bếp đang chờ kích hoạt!</b>
+                <span class="text-secondary small d-none d-sm-inline ms-1">(Nhấn vào đây để bật chuông tự động reo khi có đơn mới từ phục vụ / khách)</span>
+            </div>
+        </div>
+        <button class="btn btn-danger btn-sm fw-bold px-3 rounded-pill shadow-sm">
+            <i class="fa-solid fa-volume-high me-1"></i> BẬT CHUÔNG NGAY
+        </button>
+    </div>
+
+    <!-- KHU VỰC 1: TAB ĐƠN CHỜ CHẾ BIẾN -->
+    <div id="kitchenPendingSection">
+        <div class="row g-2 kitchen-grid-4" id="kitchenCardsGrid">
+            <div class="col-12 text-center py-5 text-muted">
+                <i class="fa-solid fa-circle-notch fa-spin fa-3x mb-3 text-warning"></i>
+                <h5>Đang kết nối trung tâm báo bếp...</h5>
+            </div>
+        </div>
+    </div>
+
+    <!-- KHU VỰC 2: TAB LỊCH SỬ ĐƠN BẾP -->
+    <div id="kitchenHistorySection" class="d-none">
+        <!-- Bộ Lọc Lịch Sử -->
+        <div class="card p-3 mb-3 border-0 shadow-sm bg-light">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-auto">
+                    <span class="fw-bold text-dark"><i class="fa-solid fa-filter me-1"></i>Lọc thời gian:</span>
+                </div>
+                <div class="col-md-auto">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-success active" id="btnFilterToday" onclick="filterKitchenHistory('TODAY')">Hôm nay</button>
+                        <button class="btn btn-outline-success" id="btnFilterWeek" onclick="filterKitchenHistory('WEEK')">7 ngày qua</button>
+                        <button class="btn btn-outline-success" id="btnFilterMonth" onclick="filterKitchenHistory('MONTH')">Tháng này</button>
+                    </div>
+                </div>
+                <div class="col-md-auto d-flex align-items-center gap-2 ms-md-auto">
+                    <small class="fw-bold">Từ ngày:</small>
+                    <input type="date" class="form-control form-control-sm" id="histStartDate" style="width: 140px;">
+                    <small class="fw-bold">Đến ngày:</small>
+                    <input type="date" class="form-control form-control-sm" id="histEndDate" style="width: 140px;">
+                    <button class="btn btn-sm btn-primary fw-bold" onclick="filterKitchenHistory('CUSTOM')">
+                        <i class="fa-solid fa-magnifying-glass me-1"></i>Tìm
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bảng Lịch Sử -->
+        <div class="table-responsive bg-white rounded-3 shadow-sm p-2">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Mã Đơn</th>
+                        <th>Bàn / Địa Chỉ</th>
+                        <th>Danh Sách Món</th>
+                        <th>Thời Gian Đặt</th>
+                        <th class="text-center">Trạng Thái</th>
+                    </tr>
+                </thead>
+                <tbody id="kitchenHistoryTableBody">
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">Chưa có lịch sử đơn hàng nào</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- KHU VỰC 3: TAB NHẬT KÝ CÔNG VIỆC CỦA ĐẦU BẾP -->
+    <div id="kitchenMyLogsSection" class="d-none">
+        <!-- 2 Thẻ Chỉ Số KPI Hôm Nay Của Đầu Bếp -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-6 col-12">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-success">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-secondary small fw-bold text-uppercase">Số Đơn Nấu Xong Hôm Nay</div>
+                            <div class="fs-2 fw-bold text-success" id="chefKpiOrdersCount">0</div>
+                            <div class="text-muted small">Đã chế biến hoàn tất & chuyển sang chờ giao</div>
+                        </div>
+                        <div class="rounded-circle bg-success bg-opacity-10 p-3 text-success">
+                            <i class="fa-solid fa-fire-burner fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-12">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white border-start border-4 border-primary">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-secondary small fw-bold text-uppercase">Tổng Số Món Ra Lò Hôm Nay</div>
+                            <div class="fs-2 fw-bold text-primary" id="chefKpiDishesCount">0</div>
+                            <div class="text-muted small">Số đĩa / phần ăn được nấu bởi bạn</div>
+                        </div>
+                        <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary">
+                            <i class="fa-solid fa-utensils fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bảng Lịch Sử Chế Biến Của Đầu Bếp -->
+        <div class="card border-0 shadow-sm rounded-3 bg-white p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold text-dark m-0">
+                    <i class="fa-solid fa-clock-rotate-left me-2 text-warning"></i>Lịch Sử Các Món Đã Nấu Xong
+                </h6>
+                <button class="btn btn-sm btn-outline-success fw-bold rounded-pill px-3" onclick="window.loadMyKitchenLogs()">
+                    <i class="fa-solid fa-rotate me-1"></i> Làm mới
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width: 150px;">Thời Gian</th>
+                            <th style="width: 180px;">Bàn / Mã Đơn</th>
+                            <th>Món Đã Nấu</th>
+                            <th class="text-center" style="width: 140px;">Hành Động</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kitchenMyLogsTableBody">
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">Đang tải nhật ký...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

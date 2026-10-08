@@ -1,0 +1,419 @@
+<!-- Nhúng CSS phong cách Smart TV & Banner Slideshow -->
+<link rel="stylesheet" href="/css/ready-tv.css">
+
+<style>
+    /* STYLING RIÊNG CHO MÀN HÌNH TRẢ MÓN (READY ORDERS) */
+    .ready-card {
+        border: none;
+        border-radius: 14px;
+        box-shadow: 0 4px 16px rgba(46, 125, 50, 0.12);
+        background: #ffffff !important;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .ready-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(46, 125, 50, 0.2);
+    }
+    
+    /* TIÊU ĐỀ THẺ XANH LÁ HOA SEN TƯƠI SÁNG */
+    .ready-header-green { 
+        background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%) !important; 
+        color: white !important; 
+    }
+
+    .ready-item-row { 
+        padding: 8px 12px; 
+        border-bottom: 1px dashed #e0e0e0; 
+        font-size: 14.5px; 
+    }
+    .ready-item-qty { 
+        background: #e8f5e9; 
+        color: #1b5e20; 
+        font-weight: 800; 
+        padding: 3px 10px; 
+        border-radius: 15px; 
+        font-size: 14px; 
+    }
+</style>
+
+<div class="container-fluid py-2 ready-orders-wrapper" id="readyOrdersContainer">
+    <!-- Header Màn hình Nhận Món với Thanh Công Cụ Smart TV -->
+    <div class="d-flex justify-content-between align-items-center mb-3 bg-white p-3 rounded-3 shadow-sm border border-success-subtle flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <h4 class="m-0 fw-bold text-success">
+                <i class="fa-solid fa-bell-concierge me-2"></i>MÀN HÌNH NHẬN MÓN / TRẢ ĐƠN
+            </h4>
+            <span class="badge bg-success fs-6 rounded-pill px-3 py-2 shadow-sm">
+                <i class="fa-solid fa-circle-check me-1"></i> Bếp Báo Xong: <b id="readyOrdersCount">0</b>
+            </span>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- NÚT CHẠY SLIDE TOÀN MÀN HÌNH NGAY LẬP TỨC (KHÔNG CẦN CHỜ HẾT ĐƠN) -->
+            <button class="btn btn-warning btn-sm rounded-pill px-3 fw-bold text-dark shadow-sm" onclick="window.readyTvScreensaver.startFullscreenShowcase()" title="Bật trình chiếu Slide quảng cáo toàn màn hình ngay lập tức">
+                <i class="fa-solid fa-play me-1"></i> Chạy Slide Toàn Màn Hình
+            </button>
+            <!-- NÚT BẬT TOÀN MÀN HÌNH SMART TV -->
+            <button class="btn btn-outline-dark btn-sm rounded-pill px-3 fw-bold" onclick="window.readyTvScreensaver.toggleBrowserFullscreen()" title="Phóng to toàn màn hình Smart TV">
+                <i class="fa-solid fa-expand me-1"></i> TV Toàn Màn Hình
+            </button>
+            <!-- NÚT NHẠC NỀN DU DƯƠNG -->
+            <button class="btn btn-outline-secondary btn-sm rounded-pill px-3 fw-bold" id="tvAmbientMusicBtn" onclick="window.readyTvScreensaver.toggleMusic()" title="Bật/Tắt nhạc nền du dương cho TV">
+                <i class="fa-solid fa-volume-xmark me-1"></i> Nhạc Nền: Tắt
+            </button>
+            <!-- NÚT CÀI ĐẶT BANNER & TV -->
+            <button class="btn btn-outline-success btn-sm rounded-pill px-3 fw-bold" onclick="window.readyTvScreensaver.openConfigModal()" title="Cài đặt kho ảnh quảng cáo và Smart TV">
+                <i class="fa-solid fa-sliders me-1"></i> Cài Đặt TV & Banner
+            </button>
+            <!-- CHUÔNG BÁO -->
+            <button class="btn btn-outline-success btn-sm rounded-pill px-3 fw-bold" onclick="toggleReadySound()">
+                <i class="fa-solid fa-volume-high" id="readySoundIcon"></i> Chuông Báo: Bật
+            </button>
+            <!-- LÀM MỚI -->
+            <button class="btn btn-success btn-sm fw-bold rounded-pill px-3" onclick="loadReadyOrdersData()">
+                <i class="fa-solid fa-rotate me-1"></i> Làm Mới
+            </button>
+        </div>
+    </div>
+
+    <!-- KHUNG BANNER VỊ TRÍ TRÊN (TOP) -->
+    <div id="readyBannerTop" style="display: none;"></div>
+
+    <!-- KHU VỰC NỘI DUNG CHÍNH (HỖ TRỢ BANNER TRÁI / PHẢI) -->
+    <div class="row g-3" id="readyMainContentRow">
+        <!-- KHUNG BANNER VỊ TRÍ TRÁI (LEFT) -->
+        <div class="col-lg-4 col-md-5" id="readyBannerLeft" style="display: none;"></div>
+
+        <!-- KHU VỰC LƯỚI THẺ ĐƠN SẴN SÀNG -->
+        <div class="col-12" id="readyOrdersGridCol">
+            <div class="row g-3" id="readyCardsGrid">
+                <div class="col-12 text-center py-5 text-muted">
+                    <i class="fa-solid fa-circle-notch fa-spin fa-3x mb-3 text-success"></i>
+                    <h5>Đang tải các đơn đã hoàn thành từ bếp...</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- KHUNG BANNER VỊ TRÍ PHẢI (RIGHT) -->
+        <div class="col-lg-4 col-md-5" id="readyBannerRight" style="display: none;"></div>
+    </div>
+
+    <!-- KHUNG BANNER VỊ TRÍ DƯỚI (BOTTOM) -->
+    <div id="readyBannerBottom" style="display: none; margin-top: 16px;"></div>
+</div>
+
+<!-- ==========================================
+     TOÀN MÀN HÌNH QUẢNG CÁO (SMART TV SCREENSAVER OVERLAY)
+     Tự động bật khi hết đơn - Lập tức ưu tiên tắt khi có đơn mới!
+     ========================================== -->
+<div id="readyFullscreenScreensaver" onclick="window.readyTvScreensaver.exitScreensaver()">
+    <button type="button" class="screensaver-exit-btn" onclick="event.stopPropagation(); window.readyTvScreensaver.exitScreensaver()">
+        <i class="fa-solid fa-xmark me-1"></i> Trở về danh sách đơn
+    </button>
+    <div id="screensaverSlideContent">
+        <!-- Nội dung slide HD toàn màn hình render từ JS -->
+    </div>
+</div>
+
+<!-- ==========================================
+     MODAL CÀI ĐẶT SMART TV, KHO ẢNH & BANNER QUẢNG CÁO
+     ========================================== -->
+<div id="readyScreenConfigModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:2400; justify-content:center; align-items:center;">
+    <div class="card shadow-lg border-0" style="width:100%; max-width:820px; background:#ffffff; border-radius:16px; margin:15px; max-height:92vh; overflow-y:auto;">
+        <div class="card-header bg-success text-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="m-0 fw-bold fs-6"><i class="fa-solid fa-tv me-2"></i>Cài Đặt Trình Chiếu Smart TV & Kho Banner Món Mới / Combo</h5>
+            <button type="button" class="btn-close btn-close-white" onclick="window.readyTvScreensaver.closeConfigModal()"></button>
+        </div>
+        
+        <div class="card-body p-3">
+            <!-- THANH TABS CÀI ĐẶT -->
+            <ul class="nav nav-pills mb-3 border-bottom pb-2 gap-2" id="tvConfigTabs">
+                <li class="nav-item">
+                    <button class="nav-link active fw-bold btn-sm rounded-pill" id="btn-tab-tv-banners" onclick="window.readyTvScreensaver.switchConfigTab('tab-tv-banners')">
+                        <i class="fa-solid fa-images me-1"></i> Kho Ảnh & Combo
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link fw-bold btn-sm rounded-pill" id="btn-tab-tv-layout" onclick="window.readyTvScreensaver.switchConfigTab('tab-tv-layout')">
+                        <i class="fa-solid fa-arrows-split-up-and-left me-1"></i> Vị Trí & Hiệu Ứng Slide
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link fw-bold btn-sm rounded-pill" id="btn-tab-tv-screensaver" onclick="window.readyTvScreensaver.switchConfigTab('tab-tv-screensaver')">
+                        <i class="fa-solid fa-desktop me-1"></i> Nghỉ Toàn Màn Hình
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link fw-bold btn-sm rounded-pill" id="btn-tab-tv-ambient" onclick="window.readyTvScreensaver.switchConfigTab('tab-tv-ambient')">
+                        <i class="fa-solid fa-music me-1"></i> Âm Thanh & Hình Nền
+                    </button>
+                </li>
+            </ul>
+
+            <!-- ==========================================
+                 TAB 1: KHO ẢNH BANNER & COMBO MÓN MỚI
+                 ========================================== -->
+            <div id="tab-tv-banners" class="tv-config-tab-pane">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark m-0 small text-uppercase"><i class="fa-solid fa-list me-1 text-success"></i> Danh Sách Banner Khuyến Mại Hiện Có:</h6>
+                    <button type="button" class="btn btn-sm btn-outline-success fw-bold py-1" onclick="window.readyTvScreensaver.resetBannerForm()">
+                        <i class="fa-solid fa-plus me-1"></i> Thêm Mới
+                    </button>
+                </div>
+                <div class="table-responsive border rounded-3 mb-3" style="max-height: 200px; overflow-y: auto;">
+                    <table class="table table-sm table-hover m-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Ảnh</th>
+                                <th>Tiêu đề & Mô tả</th>
+                                <th>Huy hiệu</th>
+                                <th>Giá</th>
+                                <th>Bật</th>
+                                <th class="text-end">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="manageBannersTableBody">
+                            <!-- JS render -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- FORM THÊM / SỬA BANNER TẢI ẢNH TỪ MÁY TÍNH -->
+                <div class="p-3 border rounded-3 bg-light">
+                    <h6 class="fw-bold text-success mb-2 fs-6" id="bannerFormTitle">
+                        <i class="fa-solid fa-plus-circle me-1"></i> Thêm Món Mới / Combo Khuyến Mại Mới
+                    </h6>
+                    <form onsubmit="window.readyTvScreensaver.saveBannerForm(event)">
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-7">
+                                <label class="form-label small fw-bold text-secondary mb-1">Tên Món / Tên Combo: <span class="text-danger">*</span></label>
+                                <input type="text" id="bannerInpTitle" class="form-control form-control-sm" placeholder="VD: Combo Cơm Chay An Lạc" required>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label small fw-bold text-secondary mb-1">Huy hiệu nổi bật:</label>
+                                <input type="text" id="bannerInpBadge" class="form-control form-control-sm" placeholder="VD: MỚI, COMBO HOT, GIẢM 20%...">
+                            </div>
+                            <div class="col-md-7">
+                                <label class="form-label small fw-bold text-secondary mb-1">Mô tả hấp dẫn ngắn:</label>
+                                <input type="text" id="bannerInpSubtitle" class="form-control form-control-sm" placeholder="VD: Thanh mát, giòn ngọt, đầy đủ dưỡng chất...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-secondary mb-1">Giá khuyến mại:</label>
+                                <input type="text" id="bannerInpPrice" class="form-control form-control-sm text-danger fw-bold" placeholder="VD: Chỉ 79.000đ">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold text-secondary mb-1">Thứ tự:</label>
+                                <input type="number" id="bannerInpOrder" class="form-control form-control-sm" value="0">
+                            </div>
+                        </div>
+
+                        <!-- KHU VỰC TẢI ẢNH TỪ MÁY TÍNH -->
+                        <div class="row g-2 align-items-center mb-3 p-2 bg-white rounded border">
+                            <div class="col-auto">
+                                <img id="bannerImgPreview" src="/uploads/dish-sample.jpg" style="width: 70px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc;">
+                            </div>
+                            <div class="col">
+                                <label class="form-label small fw-bold text-dark mb-1"><i class="fa-solid fa-cloud-arrow-up text-primary me-1"></i> Tải hình ảnh món ăn từ máy tính:</label>
+                                <input type="file" class="form-control form-control-sm" accept="image/*" onchange="window.readyTvScreensaver.uploadBannerImageFile(this)">
+                                <input type="hidden" id="bannerInpImageUrl" value="">
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.readyTvScreensaver.resetBannerForm()">Đặt lại</button>
+                            <button type="submit" id="bannerSubmitBtn" class="btn btn-sm btn-success fw-bold px-3">
+                                <i class="fa-solid fa-plus me-1"></i> Thêm Vào Kho Ảnh
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ==========================================
+                 TAB 2: VỊ TRÍ & HIỆU ỨNG SLIDE
+                 ========================================== -->
+            <div id="tab-tv-layout" class="tv-config-tab-pane d-none">
+                <form onsubmit="window.readyTvScreensaver.saveTvSettings(event)">
+                    <div class="p-3 border rounded-3 bg-light mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <span class="fw-bold text-success fs-6"><i class="fa-solid fa-toggle-on me-1"></i> Hiển Thị Banner Khuyến Mại</span>
+                                <small class="text-muted d-block">Bật hoặc tắt dải banner quảng cáo trên màn hình nhận món</small>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="cfgTvBannerEnabled" style="cursor: pointer; transform: scale(1.3);" checked>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary mb-1">
+                                    <i class="fa-solid fa-arrows-split-up-and-left me-1 text-primary"></i> Vị trí chạy slide banner:
+                                </label>
+                                <select id="cfgTvBannerPos" class="form-select form-select-sm fw-bold">
+                                    <option value="TOP">⬆️ Phía TRÊN danh sách đơn (Thanh ngang tiêu chuẩn)</option>
+                                    <option value="BOTTOM">⬇️ Phía DƯỚI danh sách đơn (Thanh ngang đáy màn hình)</option>
+                                    <option value="LEFT">⬅️ Cột bên TRÁI (Dạng poster lớn cạnh đơn)</option>
+                                    <option value="RIGHT">➡️ Cột bên PHẢI (Dạng poster lớn cạnh đơn)</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary mb-1">
+                                    <i class="fa-solid fa-wand-magic-sparkles me-1 text-warning"></i> Cách chuyển ảnh (Hiệu ứng mượt mà):
+                                </label>
+                                <select id="cfgTvBannerEffect" class="form-select form-select-sm fw-bold">
+                                    <option value="slide">➡️ Trượt ngang lướt nhẹ (Slide mượt)</option>
+                                    <option value="fade">✨ Làm mờ dần êm ái (Fade mềm mại)</option>
+                                    <option value="zoom">🔍 Phóng to chiều sâu (Zoom Cinematic)</option>
+                                    <option value="flip">🔄 Lật thẻ 3D sống động (Flip 3D)</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary mb-1">
+                                    <i class="fa-solid fa-gauge-high me-1 text-info"></i> Tốc độ lướt chuyển ảnh (mili-giây):
+                                </label>
+                                <select id="cfgTvBannerSpeed" class="form-select form-select-sm">
+                                    <option value="400">400ms (Nhanh, tức thì)</option>
+                                    <option value="800" selected>800ms (Chuẩn, êm ái)</option>
+                                    <option value="1200">1200ms (Chậm rãi, nhẹ nhàng)</option>
+                                    <option value="1600">1600ms (Rất êm dịu)</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary mb-1">
+                                    <i class="fa-solid fa-stopwatch me-1 text-danger"></i> Tần suất dừng mỗi ảnh (giây):
+                                </label>
+                                <select id="cfgTvBannerInterval" class="form-select form-select-sm">
+                                    <option value="3">3 giây (Đổi nhanh)</option>
+                                    <option value="5" selected>5 giây (Khuyên dùng cho TV)</option>
+                                    <option value="8">8 giây (Khách dễ đọc chi tiết)</option>
+                                    <option value="12">12 giây (Trầm tĩnh)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-sm btn-success fw-bold px-4 py-2 shadow-sm">
+                            <i class="fa-solid fa-save me-1"></i> Lưu Cấu Hình Vị Trí & Hiệu Ứng
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ==========================================
+                 TAB 3: CHẾ ĐỘ NGHỈ TOÀN MÀN HÌNH (SCREENSAVER)
+                 ========================================== -->
+            <div id="tab-tv-screensaver" class="tv-config-tab-pane d-none">
+                <form onsubmit="window.readyTvScreensaver.saveTvSettings(event)">
+                    <div class="p-3 border rounded-3 bg-light mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <span class="fw-bold text-primary fs-6"><i class="fa-solid fa-desktop me-1"></i> Tự Động Chiếu Toàn Màn Hình Khi Hết Đơn</span>
+                                <small class="text-muted d-block">Khi không có đơn nào đang chờ nhận món, TV sẽ tự động chuyển sang slide trình chiếu toàn màn hình HD</small>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="cfgTvScreensaverEnabled" style="cursor: pointer; transform: scale(1.3);" checked>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary mb-1">
+                                <i class="fa-solid fa-hourglass-half me-1 text-warning"></i> Thời gian chờ sau khi hết đơn trước khi bật toàn màn hình:
+                            </label>
+                            <select id="cfgTvIdleSeconds" class="form-select form-select-sm fw-bold">
+                                <option value="10">10 giây (Kiểm tra nhanh)</option>
+                                <option value="20">20 giây</option>
+                                <option value="30" selected>30 giây (Chuẩn khuyên dùng)</option>
+                                <option value="60">1 phút</option>
+                                <option value="120">2 phút</option>
+                            </select>
+                        </div>
+
+                        <div class="alert alert-info py-2 px-3 m-0 small rounded-3 border-info">
+                            <div class="fw-bold text-primary mb-1"><i class="fa-solid fa-circle-check me-1"></i> Cơ chế ưu tiên tuyệt đối khi có đơn mới:</div>
+                            Ngay khi Bếp bấm hoàn thành món mới, màn hình TV sẽ <b>lập tức thoát chế độ trình chiếu toàn màn hình</b> để hiển thị danh sách đơn cho khách và bồi bàn nhìn thấy ngay!
+                        </div>
+                    </div>
+
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-sm btn-success fw-bold px-4 py-2 shadow-sm">
+                            <i class="fa-solid fa-save me-1"></i> Lưu Cấu Hình Toàn Màn Hình
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ==========================================
+                 TAB 4: ÂM THANH DU DƯƠNG & HÌNH NỀN
+                 ========================================== -->
+            <div id="tab-tv-ambient" class="tv-config-tab-pane d-none">
+                <form onsubmit="window.readyTvScreensaver.saveTvSettings(event)">
+                    <!-- ÂM THANH DU DƯƠNG -->
+                    <div class="p-3 border rounded-3 bg-light mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <span class="fw-bold text-success fs-6"><i class="fa-solid fa-music me-1"></i> Phát Âm Thanh Du Dương / Nhạc Nền Cho Smart TV</span>
+                                <small class="text-muted d-block">Tạo không gian thiền tịnh, an lạc và thư giãn cho thực khách xem màn hình</small>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="cfgTvMusicEnabled" style="cursor: pointer; transform: scale(1.3);">
+                            </div>
+                        </div>
+
+                        <div class="row g-2 align-items-center mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary mb-1">
+                                    Âm lượng nhạc nền: <span id="cfgTvMusicVolumeVal" class="text-success fw-bold">35%</span>
+                                </label>
+                                <input type="range" class="form-range" id="cfgTvMusicVolume" min="5" max="100" value="35" oninput="document.getElementById('cfgTvMusicVolumeVal').innerText = this.value + '%'">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary mb-1">Tải file nhạc .mp3 du dương từ máy tính (tùy chọn):</label>
+                                <input type="file" class="form-control form-control-sm" accept="audio/*" onchange="window.readyTvScreensaver.uploadMusicFile(this)">
+                                <div id="cfgTvMusicStatus" class="mt-1 small text-muted">Mặc định: Nhạc chuông xoay thiền & đàn tịnh tâm tự động</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- HÌNH NỀN HOẶC MÀU NỀN TRANG NHẬN MÓN -->
+                    <div class="p-3 border rounded-3 bg-light mb-3">
+                        <h6 class="fw-bold text-dark fs-6 mb-2"><i class="fa-solid fa-palette me-1 text-primary"></i> Tùy Chỉnh Màu Nền / Hình Nền Màn Hình Nhận Món:</h6>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold text-secondary mb-1">Loại nền:</label>
+                                <select id="cfgTvBgType" class="form-select form-select-sm fw-bold">
+                                    <option value="COLOR">🎨 Màu đơn sắc / Màu tối rạp chiếu</option>
+                                    <option value="IMAGE">🖼️ Hình ảnh phong cảnh nhà hàng</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold text-secondary mb-1">Mã màu hoặc ảnh mẫu:</label>
+                                <select class="form-select form-select-sm" onchange="document.getElementById('cfgTvBgValue').value = this.value">
+                                    <option value="#f4fbf5">🌿 Xanh thanh tịnh (#f4fbf5)</option>
+                                    <option value="#ffffff">⚪ Trắng sáng tinh khôi (#ffffff)</option>
+                                    <option value="#0f172a">🌌 Tối rạp chiếu Smart TV (#0f172a)</option>
+                                    <option value="#1c1917">🪵 Gỗ ấm cúng (#1c1917)</option>
+                                </select>
+                                <input type="text" id="cfgTvBgValue" class="form-control form-control-sm mt-1" value="#f4fbf5">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold text-secondary mb-1">Tải ảnh nền từ máy tính:</label>
+                                <input type="file" class="form-control form-control-sm" accept="image/*" onchange="window.readyTvScreensaver.uploadBgImageFile(this)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-sm btn-success fw-bold px-4 py-2 shadow-sm">
+                            <i class="fa-solid fa-save me-1"></i> Lưu Cấu Hình Âm Thanh & Hình Nền
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
