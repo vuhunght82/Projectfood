@@ -699,8 +699,22 @@ app.use('/views', express.static(path.join(__dirname, 'views')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/sw.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'sw.js')));
-app.get('/views/system-settings.html', (req, res) => res.sendFile(path.join(__dirname, 'views', 'system-settings.html')));
 
+// Hỗ trợ tải giao diện cài đặt hệ thống ở mọi định dạng URL (tránh lỗi fetch 404 / connection refused)
+app.get([
+    '/system-settings', 
+    '/system_settings', 
+    '/system settings', 
+    '/views/system-settings.html', 
+    '/views/system_settings.html'
+], (req, res) => {
+    // Nếu request yêu cầu file HTML hoặc fetch partial view
+    if (req.xhr || req.headers.accept?.includes('text/html') || req.path.includes('/views/')) {
+        return res.sendFile(path.join(__dirname, 'views', 'system-settings.html'));
+    }
+    // Nếu là người dùng truy cập trực tiếp từ thanh địa chỉ trình duyệt, trả về index.html (SPA)
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 // ==========================================
 // 3. KẾT NỐI REALTIME SOCKET.IO & QUẢN LÝ PHIÊN
 // ==========================================
