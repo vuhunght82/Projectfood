@@ -294,7 +294,7 @@ async function handleLogin(event, isForced = false) {
         }
     }
 
-    // Lấy tọa độ GPS nếu thiết bị hỗ trợ (cho nhân viên có yêu cầu GPS)
+    // Lấy tọa độ GPS nếu thiết bị hỗ trợ
     let latitude = null;
     let longitude = null;
     if (navigator.geolocation) {
@@ -306,7 +306,7 @@ async function handleLogin(event, isForced = false) {
                 latitude = pos.coords.latitude;
                 longitude = pos.coords.longitude;
             }
-        } catch(eGeo) {}
+        } catch (eGeo) {}
     }
 
     try {
@@ -337,7 +337,8 @@ async function handleLogin(event, isForced = false) {
             return;
         }
 
-        if (response.ok && data.success) {
+        // Đảm bảo phải có data.user thì mới tiến hành xử lý tiếp
+        if (response.ok && data.success && data.user) {
             currentUser = data.user;
             window.currentUser = currentUser;
             localStorage.setItem('restaurant_user', JSON.stringify(currentUser));
@@ -351,13 +352,13 @@ async function handleLogin(event, isForced = false) {
             if (typeof io === 'function') {
                 const socket = window.socket || io(window.location.origin);
                 socket.emit('register_user_session', { 
-                    userId: currentUser.User_id,
-                    username: currentUser.User_name,
+                    userId: currentUser.User_id || currentUser.id,
+                    username: currentUser.User_name || currentUser.username,
                     sessionToken: currentUser.sessionToken || ''
                 });
             }
 
-            const welcomeMsg = `Xin chào ${currentUser.Full_name || currentUser.User_name}!`;
+            const welcomeMsg = `Xin chào ${currentUser.Full_name || currentUser.User_name || 'bạn'}!`;
             if (window.toast) {
                 window.toast.success(welcomeMsg);
             } else if (typeof showToast === 'function') {
@@ -385,7 +386,7 @@ async function handleLogin(event, isForced = false) {
                 document.getElementById('loginForm')?.reset();
             }
 
-            // Đồng bộ ngay cấu hình và phân quyền mới nhất từ máy chủ SQLite
+            // Đồng bộ cấu hình
             try {
                 const resCfg = await fetch('/api/system-config?t=' + Date.now());
                 if (resCfg.ok) {
@@ -395,30 +396,33 @@ async function handleLogin(event, isForced = false) {
                         localStorage.setItem('hoasen_system_config', JSON.stringify({ ...cur, ...dataCfg.config }));
                     }
                 }
-            } catch(e) {}
+            } catch (e) {}
 
-            // Cập nhật giao diện & Điều hướng trang theo Role và Quyền hạn
+            // Lấy role an toàn (hỗ trợ cả chữ hoa và chữ thường)
+            const userRole = currentUser.Role || currentUser.role || '';
+
+            // Cập nhật giao diện & Điều hướng trang theo Role
             if (typeof checkAuthStatus === 'function') checkAuthStatus();
-            if (typeof redirectUserByRole === 'function') redirectUserByRole(currentUser.Role);
+            if (typeof redirectUserByRole === 'function') redirectUserByRole(userRole);
 
-            // NẾU LÀ KHÁCH HÀNG: Nổi ngay Modal chứa QRCode của khách kèm nút đóng nhỏ
-            const roleUpper = String(currentUser.Role || '').toUpperCase();
+            // NẾU LÀ KHÁCH HÀNG: Nổi ngay Modal chứa QRCode
+            const roleUpper = String(userRole).toUpperCase();
             if (['CUSTOMER', 'KHÁCH HÀNG', 'KHACHHANG'].includes(roleUpper)) {
                 try {
-                    const resCard = await fetch(`/api/members/my-card?username=${encodeURIComponent(currentUser.User_name)}&userId=${encodeURIComponent(currentUser.User_id)}&t=${Date.now()}`);
+                    const resCard = await fetch(`/api/members/my-card?username=${encodeURIComponent(currentUser.User_name || '')}&userId=${encodeURIComponent(currentUser.User_id || '')}&t=${Date.now()}`);
                     if (resCard.ok) {
                         const cardData = await resCard.json();
                         if (cardData.success && cardData.member) {
-                            window.openCustomerQrWelcomeModal(cardData.member);
+                            window.openCustomerQrWelcomeModal?.(cardData.member);
                         }
                     }
-                } catch(errCard) {
+                } catch (errCard) {
                     console.warn('Lỗi nạp mã QR chào mừng khách hàng:', errCard);
                 }
             }
 
         } else {
-            // Hiển thị chính xác thông báo lỗi do Server trả về
+            // Hiển thị chính xác thông báo lỗi từ Server
             const errMsg = data.error || data.message || 'Tên đăng nhập hoặc mật khẩu không chính xác!';
             if (window.toast) window.toast.error(errMsg);
             else alert(errMsg);
