@@ -728,6 +728,71 @@
                         }).join(' ');
                     }
 
+                    // 🏷️ Chi tiết mã ưu đãi / Voucher & Giảm giá đã sử dụng cho đơn hàng
+                    let promoNotesHtml = '';
+
+                    // 1. Mã Voucher khuyến mãi
+                    if (ord.Voucher_code) {
+                        const campName = ord.Voucher_campaign_name ? ` (${ord.Voucher_campaign_name})` : '';
+                        let discDesc = '';
+                        if (ord.Voucher_discount && Number(ord.Voucher_discount) > 0) {
+                            discDesc = `Giảm <b>-${Number(ord.Voucher_discount).toLocaleString('vi-VN')} đ</b>`;
+                        } else if (ord.Voucher_value) {
+                            discDesc = ord.Voucher_type === 'PERCENT' ? `Giảm <b>${ord.Voucher_value}%</b>` : `Giảm <b>-${Number(ord.Voucher_value).toLocaleString('vi-VN')} đ</b>`;
+                        } else {
+                            discDesc = 'Đã áp dụng';
+                        }
+                        promoNotesHtml += `
+                            <div class="mt-1 p-1 px-2 rounded-2 border border-warning-subtle bg-warning-subtle text-dark small d-inline-block">
+                                <i class="fa-solid fa-ticket text-warning me-1"></i>
+                                <span class="text-secondary">Voucher:</span> <b class="font-monospace text-primary">${ord.Voucher_code}</b>${campName} &bull; <span class="text-danger">${discDesc}</span>
+                            </div>
+                        `;
+                    }
+
+                    // 2. Giảm giá Thẻ Hội Viên
+                    if (ord.Discount_amount && Number(ord.Discount_amount) > 0) {
+                        const pctStr = ord.Discount_percent ? `${ord.Discount_percent}% ` : '';
+                        promoNotesHtml += `
+                            <div class="mt-1 small text-success">
+                                <i class="fa-solid fa-seedling me-1"></i>Ưu đãi hạng thẻ: Giảm ${pctStr}<b>-${Number(ord.Discount_amount).toLocaleString('vi-VN')} đ</b>
+                            </div>
+                        `;
+                    }
+
+                    // 3. Đổi điểm giảm tiền
+                    if (ord.Points_used && Number(ord.Points_used) > 0) {
+                        const ptsMoney = ord.Points_amount ? ` (Quy đổi -${Number(ord.Points_amount).toLocaleString('vi-VN')} đ)` : '';
+                        promoNotesHtml += `
+                            <div class="mt-1 small text-warning-emphasis">
+                                <i class="fa-solid fa-star me-1 text-warning"></i>Đổi điểm: <b>-${ord.Points_used} điểm</b>${ptsMoney}
+                            </div>
+                        `;
+                    }
+
+                    // 4. Thanh toán ví trả trước
+                    if (ord.Prepaid_used && Number(ord.Prepaid_used) > 0) {
+                        promoNotesHtml += `
+                            <div class="mt-1 small text-info">
+                                <i class="fa-solid fa-wallet me-1"></i>Trừ ví: <b>-${Number(ord.Prepaid_used).toLocaleString('vi-VN')} đ</b>
+                            </div>
+                        `;
+                    }
+
+                    // 5. Tích điểm từ đơn
+                    if (ord.Points_earned && Number(ord.Points_earned) > 0) {
+                        promoNotesHtml += `
+                            <div class="mt-1 small text-primary" style="font-size: 11px;">
+                                <i class="fa-solid fa-circle-check me-1"></i>Tích lũy được: <b>+${ord.Points_earned} điểm</b>
+                            </div>
+                        `;
+                    }
+
+                    // Ghép vào cột món đã đặt
+                    if (promoNotesHtml) {
+                        itemsHtml += `<div class="mt-1">${promoNotesHtml}</div>`;
+                    }
+
                     // Badge Trạng thái
                     const statusUpper = String(ord.Status || '').toUpperCase();
                     let statusBadge = '<span class="badge bg-secondary">Khác</span>';
@@ -745,6 +810,27 @@
                     const orderCodeStr = ord.Order_code || `#${ord.Order_id}`;
                     const tableStr = ord.Table_number ? `<span class="badge bg-light text-dark border me-1">${ord.Table_number}</span>` : '';
 
+                    // Tính toán hiển thị tổng tiền và tiền tiết kiệm
+                    const finalAmt = Number(ord.Final_amount || 0);
+                    const totalAmt = Number(ord.Total_amount || 0);
+                    const savedAmt = (totalAmt > finalAmt) ? (totalAmt - finalAmt) : ((ord.Discount_amount || 0) + (ord.Voucher_discount || 0) + (ord.Points_amount || 0));
+
+                    let amountColHtml = `<div class="fw-bold text-success font-monospace fs-6">${finalAmt.toLocaleString('vi-VN')} đ</div>`;
+                    if (savedAmt > 0) {
+                        const origAmt = totalAmt > finalAmt ? totalAmt : (finalAmt + savedAmt);
+                        amountColHtml = `
+                            <div class="text-muted text-decoration-line-through small" style="font-size: 11px;">
+                                Gốc: ${origAmt.toLocaleString('vi-VN')} đ
+                            </div>
+                            <div class="fw-bold text-success font-monospace">
+                                ${finalAmt.toLocaleString('vi-VN')} đ
+                            </div>
+                            <div class="small text-danger fw-bold" style="font-size: 10px;">
+                                Tiết kiệm: -${savedAmt.toLocaleString('vi-VN')} đ
+                            </div>
+                        `;
+                    }
+
                     return `
                         <tr>
                             <td class="ps-3 text-nowrap">
@@ -755,8 +841,8 @@
                                 <i class="fa-regular fa-clock me-1 text-muted"></i>${dateFormatted}
                             </td>
                             <td>${itemsHtml}</td>
-                            <td class="text-end fw-bold text-success font-monospace">
-                                ${Number(ord.Final_amount || 0).toLocaleString('vi-VN')} đ
+                            <td class="text-end font-monospace">
+                                ${amountColHtml}
                             </td>
                             <td class="text-center pe-3">
                                 <div>${statusBadge}</div>
@@ -774,31 +860,62 @@
 
         const allLogs = [];
 
-        // Thêm từ memberLogs (nạp ví, trừ ví, v.v.)
-        memberLogs.forEach(l => {
+        // Thêm từ POINT_TRANSACTIONS
+        (transactions || []).forEach(t => {
+            const rawType = (t.Type || t.Transaction_type || 'EARN').toUpperCase();
+            const ptsAdd = Number(t.Points_added || 0);
+            const ptsUse = Number(t.Points_used || 0);
+            const prepAdd = Number(t.Prepaid_added || 0);
+            const prepUse = Number(t.Prepaid_used || 0);
+
+            let actionType = rawType;
+            if (rawType === 'EARN' || (ptsAdd > 0 && ptsUse === 0 && prepAdd === 0 && prepUse === 0)) {
+                actionType = 'EARN';
+            } else if (rawType === 'REDEEM' || ptsUse > 0) {
+                actionType = 'REDEEM';
+            } else if (rawType === 'PREPAID_TOPUP' || (prepAdd > 0 && prepUse === 0)) {
+                actionType = 'PREPAID_TOPUP';
+            } else if (rawType === 'PREPAID_PAY' || prepUse > 0) {
+                actionType = 'PREPAID_PAY';
+            }
+
             allLogs.push({
-                time: l.Created_at,
-                action: l.Action_type,
-                desc: l.Description || l.Action_type,
-                amountChange: l.Amount_change || 0,
-                pointsChange: l.Points_change || 0,
-                prepaidAfter: l.Prepaid_after,
-                pointsAfter: l.Points_after,
-                type: 'MEMBER_LOG'
+                time: t.Created_at,
+                action: actionType,
+                desc: t.Description || (actionType === 'EARN' ? `Tích điểm từ đơn ${t.Order_code || ''}` : 'Giao dịch điểm / ví'),
+                ptsAdd,
+                ptsUse,
+                prepAdd,
+                prepUse,
+                amountChange: prepAdd > 0 ? prepAdd : (prepUse > 0 ? -prepUse : 0),
+                pointsChange: ptsAdd > 0 ? ptsAdd : (ptsUse > 0 ? -ptsUse : 0),
+                prepaidAfter: t.Prepaid_after,
+                pointsAfter: t.Points_after,
+                balanceAfter: t.Balance_after,
+                type: 'POINT_TX'
             });
         });
 
-        // Thêm từ point transactions nếu chưa có
-        transactions.forEach(t => {
+        // Thêm từ MEMBER_LOGS (thăng hạng, đổi mật khẩu, v.v.)
+        (memberLogs || []).forEach(l => {
+            const act = (l.Action_type || 'MEMBER_LOG').toUpperCase();
+            let desc = l.Reason || l.Description || 'Cập nhật tài khoản';
+            if (act === 'TIER_UPGRADE_AUTO') {
+                desc = desc || `Thăng hạng thẻ lên ${l.New_tier || ''}`;
+            }
+
             allLogs.push({
-                time: t.Created_at,
-                action: t.Transaction_type,
-                desc: t.Description || (t.Transaction_type === 'EARN' ? 'Tích điểm đơn hàng' : 'Đổi điểm'),
-                amountChange: 0,
-                pointsChange: t.Points_amount || 0,
-                prepaidAfter: null,
-                pointsAfter: t.Balance_after,
-                type: 'POINT_TX'
+                time: l.Created_at,
+                action: act,
+                desc: desc,
+                amountChange: l.Amount_change || 0,
+                pointsChange: l.Points_change || 0,
+                oldTier: l.Old_tier,
+                newTier: l.New_tier,
+                prepaidAfter: l.Prepaid_after,
+                pointsAfter: l.Points_after,
+                balanceAfter: null,
+                type: 'MEMBER_LOG'
             });
         });
 
@@ -814,36 +931,53 @@
                 tbody.innerHTML = allLogs.map(item => {
                     const dateStr = item.time ? new Date(item.time).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '---';
                     
-                    let actionBadge = '<span class="badge bg-secondary-subtle text-secondary">Giao dịch</span>';
-                    let deltaStr = '';
-                    let afterStr = '---';
+                    let actionBadge = '';
+                    let deltaStr = '<span class="text-muted">---</span>';
+                    let afterStr = item.balanceAfter || '---';
 
-                    if (item.action === 'TOPUP_PREPAID' || item.action === 'PREPAID_TOPUP') {
-                        actionBadge = '<span class="badge bg-success-subtle text-success fw-bold">💰 Nạp Ví Trả Trước</span>';
-                        deltaStr = `<span class="text-success fw-bold">+${Number(item.amountChange).toLocaleString('vi-VN')} đ</span>`;
+                    const act = String(item.action || '').toUpperCase();
+
+                    if (act === 'TOPUP_PREPAID' || act === 'PREPAID_TOPUP') {
+                        actionBadge = '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold"><i class="fa-solid fa-money-bill-wave me-1"></i>Nạp Tiền Ví</span>';
+                        deltaStr = `<span class="text-success fw-bold">+${Number(item.prepAdd || item.amountChange || 0).toLocaleString('vi-VN')} đ</span>`;
                         if (item.prepaidAfter !== null && item.prepaidAfter !== undefined) {
                             afterStr = `Ví: ${Number(item.prepaidAfter).toLocaleString('vi-VN')} đ`;
                         }
-                    } else if (item.action === 'PREPAID_PAYMENT' || item.action === 'PAYMENT_PREPAID') {
-                        actionBadge = '<span class="badge bg-danger-subtle text-danger fw-bold">💳 Thanh Toán Bằng Ví</span>';
-                        deltaStr = `<span class="text-danger fw-bold">-${Number(Math.abs(item.amountChange)).toLocaleString('vi-VN')} đ</span>`;
+                    } else if (act === 'PREPAID_PAYMENT' || act === 'PAYMENT_PREPAID' || act === 'PREPAID_PAY') {
+                        actionBadge = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold"><i class="fa-solid fa-credit-card me-1"></i>Thanh Toán Ví</span>';
+                        deltaStr = `<span class="text-danger fw-bold">-${Number(Math.abs(item.prepUse || item.amountChange || 0)).toLocaleString('vi-VN')} đ</span>`;
                         if (item.prepaidAfter !== null && item.prepaidAfter !== undefined) {
                             afterStr = `Ví: ${Number(item.prepaidAfter).toLocaleString('vi-VN')} đ`;
                         }
-                    } else if (item.action === 'EARN' || item.action === 'POINT_EARNED') {
-                        actionBadge = '<span class="badge bg-primary-subtle text-primary fw-bold">⭐ Tích Điểm Đơn Hàng</span>';
-                        deltaStr = `<span class="text-primary fw-bold">+${Number(item.pointsChange).toLocaleString('vi-VN')} đ</span>`;
+                    } else if (act === 'EARN' || act === 'POINT_EARNED') {
+                        actionBadge = '<span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold"><i class="fa-solid fa-star me-1"></i>Tích Điểm</span>';
+                        deltaStr = `<span class="text-primary fw-bold">+${Number(item.ptsAdd || item.pointsChange || 0).toLocaleString('vi-VN')} điểm</span>`;
                         if (item.pointsAfter !== null && item.pointsAfter !== undefined) {
                             afterStr = `${Number(item.pointsAfter).toLocaleString('vi-VN')} điểm`;
                         }
-                    } else if (item.action === 'REDEEM' || item.action === 'POINT_USED') {
-                        actionBadge = '<span class="badge bg-warning-subtle text-warning-emphasis fw-bold">🎁 Đổi Điểm Giảm Tiền</span>';
-                        deltaStr = `<span class="text-warning-emphasis fw-bold">-${Number(Math.abs(item.pointsChange)).toLocaleString('vi-VN')} đ</span>`;
+                    } else if (act === 'REDEEM' || act === 'POINT_USED') {
+                        actionBadge = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-bold"><i class="fa-solid fa-gift me-1"></i>Đổi Điểm</span>';
+                        deltaStr = `<span class="text-warning-emphasis fw-bold">-${Number(Math.abs(item.ptsUse || item.pointsChange || 0)).toLocaleString('vi-VN')} điểm</span>`;
                         if (item.pointsAfter !== null && item.pointsAfter !== undefined) {
                             afterStr = `${Number(item.pointsAfter).toLocaleString('vi-VN')} điểm`;
                         }
+                    } else if (act === 'BONUS') {
+                        actionBadge = '<span class="badge bg-info-subtle text-info border border-info-subtle fw-bold"><i class="fa-solid fa-award me-1"></i>Thưởng Điểm</span>';
+                        deltaStr = `<span class="text-info fw-bold">+${Number(item.ptsAdd || item.pointsChange || 0).toLocaleString('vi-VN')} điểm</span>`;
+                        if (item.pointsAfter !== null && item.pointsAfter !== undefined) {
+                            afterStr = `${Number(item.pointsAfter).toLocaleString('vi-VN')} điểm`;
+                        }
+                    } else if (act === 'TIER_UPGRADE_AUTO' || act === 'TIER_MANUAL_CHANGE') {
+                        actionBadge = '<span class="badge bg-warning-subtle text-dark border border-warning fw-bold"><i class="fa-solid fa-crown me-1"></i>Nâng Hạng Thẻ</span>';
+                        deltaStr = `<span class="badge bg-light text-primary border">${item.newTier || 'Hạng mới'}</span>`;
+                    } else if (act === 'MEMBER_REGISTER') {
+                        actionBadge = '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold"><i class="fa-solid fa-id-card me-1"></i>Kích Hoạt Thẻ</span>';
+                        deltaStr = `<span class="text-success small fw-bold">Khởi tạo thẻ</span>`;
+                    } else if (act === 'PASSWORD_CHANGED') {
+                        actionBadge = '<span class="badge bg-secondary-subtle text-secondary border fw-bold"><i class="fa-solid fa-key me-1"></i>Đổi Mật Khẩu</span>';
+                        deltaStr = `<span class="text-muted small">Bảo mật</span>`;
                     } else {
-                        actionBadge = `<span class="badge bg-light text-dark border">${item.action}</span>`;
+                        actionBadge = `<span class="badge bg-light text-dark border fw-bold"><i class="fa-solid fa-clock-rotate-left me-1"></i>${item.action || 'Thao tác'}</span>`;
                         if (item.amountChange) {
                             deltaStr = `${Number(item.amountChange).toLocaleString('vi-VN')} đ`;
                         } else if (item.pointsChange) {
@@ -1030,10 +1164,25 @@
                 } catch(e) {}
             }
 
-            // Tải danh sách chiến dịch chung đang chạy
+            // Tải danh sách chiến dịch chung đang chạy (Chỉ lấy chiến dịch còn hạn và phù hợp với hạng thẻ)
             const cRes = await fetch('/api/marketing/campaigns?t=' + Date.now());
             const cData = await cRes.json();
-            const campaigns = ((cData.campaigns || []).filter(c => (c.Is_active == 1 && c.Show_banner == 1))) || [];
+
+            const today = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+            const memTier = member ? String(member.Card_tier || member.Current_tier || '').toUpperCase() : '';
+
+            const campaigns = ((cData.campaigns || []).filter(c => {
+                if (c.Is_active != 1) return false;
+                if (c.Show_banner != 1) return false;
+                // Không hiển thị nếu chiến dịch đã hết hạn
+                if (c.End_date && c.End_date.substring(0, 10) < todayStr) return false;
+                if (c.Start_date && c.Start_date.substring(0, 10) > todayStr) return false;
+                // Không hiển thị nếu chiến dịch chỉ dành cho hạng thẻ khác
+                if (c.Target_tier && c.Target_tier !== 'ALL' && memTier && c.Target_tier !== memTier) return false;
+                return true;
+            })) || [];
 
             const totalCount = myVouchers.length + campaigns.length;
             if (badge) badge.innerText = `${totalCount} Ưu Đãi Đang Chạy`;

@@ -1017,11 +1017,44 @@ router.get('/my-card', (req, res) => {
         const memberId = member.Member_id;
         const { map: tierMap } = getTierConfigFromDb(db);
 
-        const transactions = db.prepare(`
+        const rawTransactions = db.prepare(`
             SELECT * FROM POINT_TRANSACTIONS 
             WHERE Member_id = ? 
             ORDER BY Transaction_id DESC LIMIT 50
         `).all(memberId);
+
+        // Tính toán số dư sau cùng cho từng giao dịch
+        let runningPoints = Number(member.Reward_points || 0);
+        let runningPrepaid = Number(member.Prepaid_balance || 0);
+
+        const transactions = rawTransactions.map(t => {
+            const ptsAdd = Number(t.Points_added || 0);
+            const ptsUse = Number(t.Points_used || 0);
+            const prepAdd = Number(t.Prepaid_added || 0);
+            const prepUse = Number(t.Prepaid_used || 0);
+
+            let pointsAfter = null;
+            let prepaidAfter = null;
+
+            if (ptsAdd > 0 || ptsUse > 0) {
+                pointsAfter = runningPoints;
+                runningPoints = Math.max(0, runningPoints - ptsAdd + ptsUse);
+            }
+            if (prepAdd > 0 || prepUse > 0) {
+                prepaidAfter = runningPrepaid;
+                runningPrepaid = Math.max(0, runningPrepaid - prepAdd + prepUse);
+            }
+
+            return {
+                ...t,
+                Transaction_type: t.Type,
+                Points_amount: ptsAdd > 0 ? ptsAdd : ptsUse,
+                Amount_change: prepAdd > 0 ? prepAdd : (prepUse > 0 ? -prepUse : 0),
+                Points_after: pointsAfter,
+                Prepaid_after: prepaidAfter,
+                Balance_after: pointsAfter !== null ? `${pointsAfter} điểm` : (prepaidAfter !== null ? `${Number(prepaidAfter).toLocaleString('vi-VN')} đ` : null)
+            };
+        });
 
         const memberLogs = db.prepare(`
             SELECT * FROM MEMBER_LOGS 
@@ -1030,10 +1063,18 @@ router.get('/my-card', (req, res) => {
         `).all(memberId);
 
         const recentOrders = db.prepare(`
-            SELECT Order_id, Order_code, Table_number, Final_amount, Status, Payment_status, Created_at, Discount_amount, Points_used, Points_earned
-            FROM ORDERS 
-            WHERE Member_id = ? OR Customer_phone = ? 
-            ORDER BY Order_id DESC LIMIT 25
+            SELECT o.Order_id, o.Order_code, o.Table_number, o.Table_name, o.Order_type,
+                   o.Total_amount, o.Final_amount, o.Status, o.Payment_status, o.Created_at,
+                   o.Discount_percent, o.Discount_amount, o.Points_used, o.Points_amount, o.Points_earned,
+                   o.Prepaid_used, o.Voucher_code, o.Voucher_discount, o.Note,
+                   COALESCE(mc.Campaign_name, mv.Title) AS Voucher_campaign_name,
+                   COALESCE(mc.Discount_type, mv.Discount_type) AS Voucher_type,
+                   COALESCE(mc.Discount_value, mv.Discount_value) AS Voucher_value
+            FROM ORDERS o
+            LEFT JOIN MARKETING_CAMPAIGNS mc ON (o.Voucher_code IS NOT NULL AND UPPER(o.Voucher_code) = UPPER(mc.Code))
+            LEFT JOIN MEMBER_VOUCHERS mv ON (o.Voucher_code IS NOT NULL AND UPPER(o.Voucher_code) = UPPER(mv.Voucher_code))
+            WHERE o.Member_id = ? OR o.Customer_phone = ? 
+            ORDER BY o.Order_id DESC LIMIT 25
         `).all(memberId, member.Phone);
 
         const itemsStmt = db.prepare(`
@@ -1076,11 +1117,43 @@ router.get('/:id', (req, res) => {
             return res.status(404).json({ success: false, error: 'Không tìm thấy thành viên này!' });
         }
 
-        const transactions = db.prepare(`
+        const rawTransactions = db.prepare(`
             SELECT * FROM POINT_TRANSACTIONS 
             WHERE Member_id = ? 
             ORDER BY Transaction_id DESC LIMIT 50
         `).all(memberId);
+
+        let runningPoints = Number(member.Reward_points || 0);
+        let runningPrepaid = Number(member.Prepaid_balance || 0);
+
+        const transactions = rawTransactions.map(t => {
+            const ptsAdd = Number(t.Points_added || 0);
+            const ptsUse = Number(t.Points_used || 0);
+            const prepAdd = Number(t.Prepaid_added || 0);
+            const prepUse = Number(t.Prepaid_used || 0);
+
+            let pointsAfter = null;
+            let prepaidAfter = null;
+
+            if (ptsAdd > 0 || ptsUse > 0) {
+                pointsAfter = runningPoints;
+                runningPoints = Math.max(0, runningPoints - ptsAdd + ptsUse);
+            }
+            if (prepAdd > 0 || prepUse > 0) {
+                prepaidAfter = runningPrepaid;
+                runningPrepaid = Math.max(0, runningPrepaid - prepAdd + prepUse);
+            }
+
+            return {
+                ...t,
+                Transaction_type: t.Type,
+                Points_amount: ptsAdd > 0 ? ptsAdd : ptsUse,
+                Amount_change: prepAdd > 0 ? prepAdd : (prepUse > 0 ? -prepUse : 0),
+                Points_after: pointsAfter,
+                Prepaid_after: prepaidAfter,
+                Balance_after: pointsAfter !== null ? `${pointsAfter} điểm` : (prepaidAfter !== null ? `${Number(prepaidAfter).toLocaleString('vi-VN')} đ` : null)
+            };
+        });
 
         const memberLogs = db.prepare(`
             SELECT * FROM MEMBER_LOGS 
@@ -1089,11 +1162,28 @@ router.get('/:id', (req, res) => {
         `).all(memberId);
 
         const recentOrders = db.prepare(`
-            SELECT Order_id, Order_code, Table_number, Final_amount, Status, Payment_status, Created_at, Discount_amount, Points_used, Points_earned
-            FROM ORDERS 
-            WHERE Member_id = ? OR Customer_phone = ? 
-            ORDER BY Order_id DESC LIMIT 15
+            SELECT o.Order_id, o.Order_code, o.Table_number, o.Table_name, o.Order_type,
+                   o.Total_amount, o.Final_amount, o.Status, o.Payment_status, o.Created_at,
+                   o.Discount_percent, o.Discount_amount, o.Points_used, o.Points_amount, o.Points_earned,
+                   o.Prepaid_used, o.Voucher_code, o.Voucher_discount, o.Note,
+                   COALESCE(mc.Campaign_name, mv.Title) AS Voucher_campaign_name,
+                   COALESCE(mc.Discount_type, mv.Discount_type) AS Voucher_type,
+                   COALESCE(mc.Discount_value, mv.Discount_value) AS Voucher_value
+            FROM ORDERS o
+            LEFT JOIN MARKETING_CAMPAIGNS mc ON (o.Voucher_code IS NOT NULL AND UPPER(o.Voucher_code) = UPPER(mc.Code))
+            LEFT JOIN MEMBER_VOUCHERS mv ON (o.Voucher_code IS NOT NULL AND UPPER(o.Voucher_code) = UPPER(mv.Voucher_code))
+            WHERE o.Member_id = ? OR o.Customer_phone = ? 
+            ORDER BY o.Order_id DESC LIMIT 25
         `).all(memberId, member.Phone);
+
+        const itemsStmt = db.prepare(`
+            SELECT Item_name, Quantity, Unit_price, Total_price, Note
+            FROM ORDER_DETAILS
+            WHERE Order_id = ?
+        `);
+        for (const ord of recentOrders) {
+            ord.items = itemsStmt.all(ord.Order_id);
+        }
 
         db.close();
 

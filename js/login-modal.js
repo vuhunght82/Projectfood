@@ -140,12 +140,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 (data.userId && String(u.User_id) === String(data.userId)) || 
                 (data.username && String(u.User_name || '').toLowerCase() === String(data.username).toLowerCase())
             )) {
+                // Bỏ qua nếu chính là phiên mới vừa đăng nhập tạo token này
+                if (data.newSessionToken && u.sessionToken && String(data.newSessionToken) === String(u.sessionToken)) {
+                    return;
+                }
                 currentUser = null;
                 window.currentUser = null;
                 localStorage.removeItem('restaurant_user');
                 if (typeof checkAuthStatus === 'function') checkAuthStatus();
                 alert('⚠️ PHIÊN ĐĂNG NHẬP ĐÃ KẾT THÚC!\n\nTài khoản của bạn vừa được đăng nhập trên một thiết bị/máy khác. Phiên làm việc trên thiết bị này đã được tự động kết thúc để bảo đảm an toàn chính sách 1 máy!');
-                navigateTo('/');
+                if (typeof navigateTo === 'function') navigateTo('/');
                 if (typeof openLoginModal === 'function') openLoginModal();
             }
         });
@@ -434,6 +438,7 @@ async function handleLogin(event, isForced = false) {
         else alert('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại đường truyền mạng!');
     }
 }
+window.handleLogin = handleLogin;
 
 // Xử lý xác nhận đẩy phiên (Force logout máy cũ)
 window.confirmForceLogoutSession = function() {

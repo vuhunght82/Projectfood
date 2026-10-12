@@ -42,6 +42,16 @@ if (window.socket) {
     window.socket.on('tables_list_changed', function() {
         if (typeof window.loadOrders === 'function') window.loadOrders();
     });
+
+    window.socket.off('table_updated');
+    window.socket.on('table_updated', function() {
+        if (typeof window.loadOrders === 'function') window.loadOrders();
+    });
+
+    window.socket.off('table_cleared');
+    window.socket.on('table_cleared', function() {
+        if (typeof window.loadOrders === 'function') window.loadOrders();
+    });
 }
 
 // 1. PHÂN QUYỀN 3 TAB ĐƠN HÀNG, BÁO CÁO & KPI TOÀN QUÁN
@@ -319,15 +329,24 @@ window.applyOrderFilters = function() {
             String(order.Cancel_reason || '').toLowerCase().includes('hủy')
         );
 
+        const isDineIn = (order.Order_type === 'DINE_IN' || Boolean(order.Table_number));
+        const isTableOccupied = Boolean(order.isTableServing);
+        const isNotDone = !['COMPLETED', 'SERVED', 'DONE'].includes(statusRaw);
+
+        // Đơn ĐANG PHỤC VỤ / XỬ LÝ khi:
+        // - Bàn ăn gắn với đơn vẫn đang ở trạng thái phục vụ khách (isTableOccupied)
+        // - HOẶC món ăn chưa làm xong / chưa giao xong (isNotDone)
+        const isServing = !isCanceled && (isTableOccupied || isNotDone);
+
         if (processStatus === 'SERVING') {
-            // Đang phục vụ: Đang làm, chờ giao, bàn đang ăn (chưa hủy, chưa giao xong)
-            if (isCanceled || statusRaw === 'COMPLETED' || statusRaw === 'SERVED' || statusRaw === 'DONE') return false;
+            // Đang phục vụ: Đang làm, chờ giao, hoặc bàn đang ngồi ăn
+            if (!isServing) return false;
         } else if (processStatus === 'UNPAID') {
             // Chờ thanh toán: Chưa trả tiền và chưa hủy
             if (isPaid || isCanceled) return false;
         } else if (processStatus === 'PAID_COMPLETED') {
-            // Đã hoàn thành hoặc đã thanh toán
-            if (isCanceled || (!isPaid && statusRaw !== 'COMPLETED' && statusRaw !== 'SERVED')) return false;
+            // Đã hoàn thành (đã giao xong VÀ bàn đã dọn)
+            if (isCanceled || isServing) return false;
         } else if (processStatus === 'CANCELED') {
             if (!isCanceled) return false;
         }
@@ -374,18 +393,25 @@ window.applyOrderFilters = function() {
             String(o.Cancel_reason || '').toLowerCase().includes('hủy')
         );
         const amount = Number(o.Final_amount || o.Total_amount || 0);
+        const isDineIn = (o.Order_type === 'DINE_IN' || Boolean(o.Table_number));
+        const isTableOccupied = Boolean(o.isTableServing);
+        const isNotDone = !['COMPLETED', 'SERVED', 'DONE'].includes(statusRaw);
 
         if (isCanceled) {
             canceledCount++;
-        } else if (statusRaw === 'COMPLETED' || statusRaw === 'SERVED' || statusRaw === 'DONE') {
-            completedCount++;
-            if (amount > 0) totalRevenue += amount;
         } else {
-            // Đang phục vụ / đang xử lý
-            servingCount++;
-            if (!isPaid) unpaidServingCount++;
-            // Nếu đã thu tiền trước (tiền mặt ngay lúc đặt đơn) thì cộng vào doanh thu đã xử lý
-            if (isPaid && amount > 0) totalRevenue += amount;
+            const isServing = isTableOccupied || isNotDone;
+            if (isServing) {
+                // Đang phục vụ / đang xử lý
+                servingCount++;
+                if (!isPaid) unpaidServingCount++;
+                // Nếu khách đã thanh toán trước (tiền mặt ngay lúc đặt đơn) thì cộng vào doanh thu
+                if (isPaid && amount > 0) totalRevenue += amount;
+            } else {
+                // Đã hoàn thành (đã giao xong, bàn đã giải phóng)
+                completedCount++;
+                if (amount > 0) totalRevenue += amount;
+            }
         }
     });
 
@@ -2007,8 +2033,12 @@ window.renderQuickCharts = function(filteredOrders) {
             const statusRaw = String(o.Status || '').toUpperCase();
             const isCompleted = (statusRaw === 'COMPLETED' || statusRaw === 'SERVED' || statusRaw === 'DONE');
             const isCanceled = (statusRaw === 'CANCELED' || statusRaw === 'CANCELLED' || Boolean(o.Cancel_role));
+            const isDineIn = (o.Order_type === 'DINE_IN' || Boolean(o.Table_number));
+            const isTableOccupied = Boolean(o.isTableServing);
+            const isNotDone = !['COMPLETED', 'SERVED', 'DONE'].includes(statusRaw);
+            const isServing = isTableOccupied || (isDineIn && !isPaid) || isNotDone;
 
-            if (!isCanceled && (isPaid || isCompleted)) {
+            if (!isCanceled && (isPaid || (!isServing && isCompleted))) {
                 const dateKey = String(o.Created_at || o.createdAt || '').substring(0, 10) || 'Hôm nay';
                 const amount = Number(o.Final_amount || o.Total_amount || 0);
                 revMap[dateKey] = (revMap[dateKey] || 0) + amount;
@@ -2077,13 +2107,21 @@ window.renderQuickCharts = function(filteredOrders) {
 
         orders.forEach(o => {
             const statusRaw = String(o.Status || '').toUpperCase();
+            const isPaid = (String(o.Payment_status || '').toUpperCase() === 'PAID');
             const isCanceled = (statusRaw === 'CANCELED' || statusRaw === 'CANCELLED' || Boolean(o.Cancel_role) || String(o.Cancel_reason || '').toLowerCase().includes('hủy'));
+            const isDineIn = (o.Order_type === 'DINE_IN' || Boolean(o.Table_number));
+            const isTableOccupied = Boolean(o.isTableServing);
+            const isNotDone = !['COMPLETED', 'SERVED', 'DONE'].includes(statusRaw);
+
             if (isCanceled) {
                 canceled++;
-            } else if (statusRaw === 'COMPLETED' || statusRaw === 'SERVED' || statusRaw === 'DONE') {
-                completed++;
             } else {
-                serving++;
+                const isServing = isTableOccupied || (isDineIn && !isPaid) || isNotDone;
+                if (isServing) {
+                    serving++;
+                } else {
+                    completed++;
+                }
             }
         });
 

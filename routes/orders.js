@@ -9,21 +9,52 @@ const { processOrderLoyalty } = require('./members');
 // GET: Lấy danh sách tất cả đơn hàng
 router.get('/', (req, res) => {
     try {
-        const db = new Database(DB_PATH, { readonly: true });
-        const orders = db.prepare('SELECT * FROM ORDERS ORDER BY Order_id DESC').all();
+        const localDb = new Database(DB_PATH, { readonly: true });
+        const activeTables = localDb.prepare("SELECT Table_id, Table_name, Table_code, Status, Current_order_id, Current_order_code FROM DINING_TABLES WHERE Status = 'SERVING' OR Current_order_id IS NOT NULL").all();
+        const orders = localDb.prepare('SELECT * FROM ORDERS ORDER BY Order_id DESC').all();
+        const todayStr = new Date().toISOString().substring(0, 10);
+
         const result = orders.map(order => {
             let items = [];
             try {
-                items = db.prepare('SELECT * FROM ORDER_DETAILS WHERE Order_id = ?').all(order.Order_id);
+                items = localDb.prepare('SELECT * FROM ORDER_DETAILS WHERE Order_id = ?').all(order.Order_id);
             } catch (e) { items = []; }
             if (!items || items.length === 0) {
                 try {
-                    items = db.prepare('SELECT * FROM ORDER_ITEMS WHERE order_id = ?').all(order.Order_id);
+                    items = localDb.prepare('SELECT * FROM ORDER_ITEMS WHERE order_id = ?').all(order.Order_id);
                 } catch (e2) { items = []; }
             }
-            return { ...order, items };
+
+            // Xác định xem bàn ăn tương ứng có đang ở trạng thái SERVING trong DINING_TABLES không
+            let isTableServing = false;
+            if (activeTables && activeTables.length > 0) {
+                const oTable = String(order.Table_number || order.Table_name || '').toLowerCase().trim();
+                const oId = String(order.Order_id);
+                const oCode = String(order.Order_code || '').toLowerCase().trim();
+
+                isTableServing = activeTables.some(t => {
+                    if (t.Status !== 'SERVING') return false;
+                    const matchId = (t.Current_order_id && String(t.Current_order_id) === oId) ||
+                                    (t.Current_order_code && String(t.Current_order_code).toLowerCase().trim() === oCode);
+                    if (matchId) return true;
+
+                    // Nếu bàn đang phục vụ nhưng chưa lưu Current_order_id, khớp theo tên bàn trong ngày
+                    if (!t.Current_order_id && !t.Current_order_code) {
+                        const tName = String(t.Table_name || '').toLowerCase().trim();
+                        const tCode = String(t.Table_code || '').toLowerCase().trim();
+                        const sameTable = (tName && (tName === oTable || oTable.includes(tName))) ||
+                                         (tCode && (tCode === oTable || oTable.includes(tCode)));
+
+                        const isToday = String(order.Created_at || '').substring(0, 10) === todayStr;
+                        return sameTable && isToday;
+                    }
+                    return false;
+                });
+            }
+
+            return { ...order, items, isTableServing };
         });
-        db.close();
+        localDb.close();
         res.json(result);
     } catch (err) { 
         res.status(500).json({ error: err.message }); 

@@ -29,60 +29,51 @@ router.get('/', (req, res) => {
 
         // Cập nhật trạng thái thực tế cho từng bàn
         const enrichedTables = tables.map(table => {
-            // Tìm đơn hàng đang phục vụ khớp với tên bàn hoặc mã bàn
-            const activeOrder = activeOrders.find(o => {
-                const oTable = String(o.Table_number || o.Table_name || '').toLowerCase().trim();
-                const tName = String(table.Table_name || '').toLowerCase().trim();
-                const tCode = String(table.Table_code || '').toLowerCase().trim();
-                return oTable === tName || oTable === tCode || (oTable && (tName.includes(oTable) || oTable.includes(tName)));
-            });
+            // Xác định đơn hàng gắn liền với bàn này
+            let orderIdToLookup = table.Current_order_id;
+            
+            // Nếu bàn chưa gắn Order_id nhưng có đơn hàng đang nấu/chờ phục vụ trong ngày
+            if (!orderIdToLookup) {
+                const found = activeOrders.find(o => {
+                    const oTable = String(o.Table_number || o.Table_name || '').toLowerCase().trim();
+                    const tName = String(table.Table_name || '').toLowerCase().trim();
+                    const tCode = String(table.Table_code || '').toLowerCase().trim();
+                    return oTable === tName || oTable === tCode || (oTable && (tName.includes(oTable) || oTable.includes(tName)));
+                });
+                if (found) orderIdToLookup = found.Order_id;
+            }
 
-            if (activeOrder) {
-                const amount = Number(activeOrder.Final_amount || activeOrder.Total_amount || 0);
-                const guests = Number(activeOrder.Guest_count || table.Current_guests || 1);
-                const paymentStatus = String(activeOrder.Payment_status || 'UNPAID').toUpperCase();
+            if (orderIdToLookup) {
+                const ord = db.prepare(`SELECT Order_id, Order_code, Final_amount, Total_amount, Payment_status, Guest_count, Status, Created_at FROM ORDERS WHERE Order_id = ?`).get(orderIdToLookup);
+                if (ord && String(ord.Status || '').toUpperCase() !== 'CANCELLED') {
+                    const amount = Number(ord.Final_amount || ord.Total_amount || 0);
+                    const guests = Number(ord.Guest_count || table.Current_guests || 1);
+                    const paymentStatus = String(ord.Payment_status || 'UNPAID').toUpperCase();
 
-                // Đồng bộ lại vào bảng nếu có thay đổi
-                if (table.Status !== 'SERVING' || table.Current_order_id !== activeOrder.Order_id || table.Current_amount !== amount || table.Payment_status !== paymentStatus) {
-                    db.prepare(`
-                        UPDATE DINING_TABLES 
-                        SET Status = 'SERVING', Current_order_id = ?, Current_order_code = ?, Current_amount = ?, Payment_status = ?, Current_guests = CASE WHEN Current_guests <= 0 THEN ? ELSE Current_guests END, Updated_at = datetime('now', 'localtime')
-                        WHERE Table_id = ?
-                    `).run(activeOrder.Order_id, activeOrder.Order_code, amount, paymentStatus, guests, table.Table_id);
-                }
-
-                return {
-                    ...table,
-                    Status: 'SERVING',
-                    Current_order_id: activeOrder.Order_id,
-                    Current_order_code: activeOrder.Order_code,
-                    Current_amount: amount,
-                    Payment_status: paymentStatus,
-                    Current_guests: table.Current_guests > 0 ? table.Current_guests : guests,
-                    Order_created_at: activeOrder.Created_at
-                };
-            } else {
-                // Không có đơn hàng nào đang hoạt động cho bàn này.
-                // Nếu bàn trước đó có Current_order_id hoặc đang SERVING -> tự động giải phóng bàn về EMPTY
-                if (table.Current_order_id || table.Status === 'SERVING') {
-                    db.prepare(`
-                        UPDATE DINING_TABLES 
-                        SET Status = 'EMPTY', Current_order_id = NULL, Current_order_code = NULL, Current_amount = 0, Payment_status = 'UNPAID', Current_guests = 0, Updated_at = datetime('now', 'localtime')
-                        WHERE Table_id = ?
-                    `).run(table.Table_id);
+                    // Đồng bộ lại vào bảng nếu có thay đổi
+                    if (table.Status !== 'SERVING' || table.Current_order_id !== ord.Order_id || table.Current_amount !== amount || table.Payment_status !== paymentStatus) {
+                        db.prepare(`
+                            UPDATE DINING_TABLES 
+                            SET Status = 'SERVING', Current_order_id = ?, Current_order_code = ?, Current_amount = ?, Payment_status = ?, Current_guests = CASE WHEN Current_guests <= 0 THEN ? ELSE Current_guests END, Updated_at = datetime('now', 'localtime')
+                            WHERE Table_id = ?
+                        `).run(ord.Order_id, ord.Order_code, amount, paymentStatus, guests, table.Table_id);
+                    }
 
                     return {
                         ...table,
-                        Status: 'EMPTY',
-                        Current_order_id: null,
-                        Current_order_code: null,
-                        Current_amount: 0,
-                        Payment_status: 'UNPAID',
-                        Current_guests: 0
+                        Status: 'SERVING',
+                        Current_order_id: ord.Order_id,
+                        Current_order_code: ord.Order_code,
+                        Current_amount: amount,
+                        Payment_status: paymentStatus,
+                        Current_guests: table.Current_guests > 0 ? table.Current_guests : guests,
+                        Order_created_at: ord.Created_at
                     };
                 }
             }
 
+            // Lưu ý: Tuyệt đối không tự động dọn bàn về EMPTY khi đơn hoàn tất hoặc trả món.
+            // Bàn chỉ chuyển về EMPTY khi nhân viên chủ động bấm "Dọn bàn" (POST /:id/clear).
             return table;
         });
 

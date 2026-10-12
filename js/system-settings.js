@@ -2359,9 +2359,12 @@ window.loadMarketingCampaigns = async function() {
             `;
         }
 
-        // Tự động nạp luôn bảng Lịch sử đẩy mã cho hội viên
+        // Tự động nạp luôn bảng Lịch sử đẩy mã cho hội viên và loại chiến dịch
         if (typeof window.loadMemberVouchersHistory === 'function') {
             window.loadMemberVouchersHistory();
+        }
+        if (typeof window.loadCampaignTypes === 'function') {
+            window.loadCampaignTypes();
         }
 
         const typeLabels = {
@@ -2625,10 +2628,25 @@ window.deleteMarketingCampaign = async function(id, code) {
 };
 
 // ========================================================
-// ĐẨY MÃ GIẢM GIÁ CHO HỘI VIÊN
+// ĐẨY MÃ GIẢM GIÁ CHO HỘI VIÊN & QUẢN LÝ ĐỐI TƯỢNG, LOẠI CHIẾN DỊCH
 // ========================================================
 
-window.openPushVoucherModal = function() {
+window._cachedPushMembers = [];
+
+window.ensurePushMembersLoaded = async function() {
+    if (window._cachedPushMembers && window._cachedPushMembers.length > 0) return window._cachedPushMembers;
+    try {
+        const res = await fetch('/api/members?t=' + Date.now());
+        const data = await res.json();
+        window._cachedPushMembers = data.members || [];
+    } catch (e) {
+        console.error('Lỗi nạp danh sách thành viên:', e);
+        window._cachedPushMembers = [];
+    }
+    return window._cachedPushMembers;
+};
+
+window.openPushVoucherModal = async function() {
     const select = document.getElementById('pushVoucherCampaignSelect');
     if (select) {
         select.innerHTML = '<option value="">-- Chọn chiến dịch có sẵn --</option>' +
@@ -2637,7 +2655,12 @@ window.openPushVoucherModal = function() {
             ).join('');
     }
 
+    const targetTypeSelect = document.getElementById('pushVoucherTargetType');
+    if (targetTypeSelect) targetTypeSelect.value = 'ALL';
     window.handlePushTargetChange('ALL');
+
+    await window.ensurePushMembersLoaded();
+    await window.loadTargetGroupsForSelect();
 
     if (typeof window.openMemberModalElement === 'function') {
         window.openMemberModalElement('pushVoucherModal');
@@ -2655,10 +2678,70 @@ window.handlePushTargetChange = function(type) {
     const tierRow = document.getElementById('pushVoucherTierRow');
     const tenureRow = document.getElementById('pushVoucherTenureRow');
     const randomRow = document.getElementById('pushVoucherRandomRow');
+    const selectedWrap = document.getElementById('pushVoucherSelectedWrap');
+    const customGroupWrap = document.getElementById('pushVoucherCustomGroupWrap');
 
     if (tierRow) tierRow.style.display = (type === 'TIER') ? 'block' : 'none';
     if (tenureRow) tenureRow.style.display = (type === 'TENURE') ? 'block' : 'none';
     if (randomRow) randomRow.style.display = (type === 'RANDOM') ? 'block' : 'none';
+    if (selectedWrap) selectedWrap.style.display = (type === 'SELECTED') ? 'block' : 'none';
+    if (customGroupWrap) customGroupWrap.style.display = (type === 'CUSTOM_GROUP') ? 'block' : 'none';
+
+    if (type === 'SELECTED') {
+        window.renderPushMemberList();
+    }
+};
+
+window.renderPushMemberList = function(list = null) {
+    const container = document.getElementById('pushVoucherMemberList');
+    if (!container) return;
+    const members = list || window._cachedPushMembers || [];
+    if (members.length === 0) {
+        container.innerHTML = '<div class="text-muted small text-center py-2">Không tìm thấy hội viên nào</div>';
+        return;
+    }
+    const tierMap = {
+        'MAM_SEN': 'Mầm',
+        'BUP_SEN': 'Búp',
+        'SEN_HONG': 'Hồng',
+        'SEN_KIM_CUONG': 'K.Cương'
+    };
+    container.innerHTML = members.map(m => {
+        const mid = m.Member_id || m.id;
+        const name = m.Full_name || m.User_name || 'Khách';
+        const phone = m.Phone ? ` - ${m.Phone}` : '';
+        const tier = tierMap[m.Card_tier] || m.Card_tier || 'Mầm';
+        return `
+            <div class="form-check form-check-inline d-flex align-items-center mb-1 me-2 py-1 px-2 rounded hover-bg" style="font-size: 13px; background: #fdfdfd; border: 1px solid #f0f0f0;">
+                <input class="form-check-input push-member-checkbox me-2" type="checkbox" value="${mid}" id="pvm_${mid}">
+                <label class="form-check-label text-truncate cursor-pointer" for="pvm_${mid}" style="max-width: 280px;">
+                    <span class="fw-bold">${name}</span>
+                    <span class="text-muted small">${phone}</span>
+                    <span class="badge bg-light text-primary border ms-1" style="font-size: 10px;">${tier}</span>
+                </label>
+            </div>
+        `;
+    }).join('');
+};
+
+window.filterPushMemberList = function(kw) {
+    const search = (kw || '').trim().toLowerCase();
+    if (!search) {
+        window.renderPushMemberList(window._cachedPushMembers);
+        return;
+    }
+    const filtered = (window._cachedPushMembers || []).filter(m => {
+        const name = (m.Full_name || m.User_name || '').toLowerCase();
+        const phone = (m.Phone || '').toLowerCase();
+        const code = (m.Card_code || '').toLowerCase();
+        return name.includes(search) || phone.includes(search) || code.includes(search);
+    });
+    window.renderPushMemberList(filtered);
+};
+
+window.selectAllPushMembers = function(isAll) {
+    const checkboxes = document.querySelectorAll('.push-member-checkbox');
+    checkboxes.forEach(cb => { cb.checked = isAll; });
 };
 
 window.submitPushVouchers = async function(event) {
@@ -2682,6 +2765,27 @@ window.submitPushVouchers = async function(event) {
         expiryDays = Number(expirySelect);
     }
 
+    let selectedMemberIds = [];
+    if (targetType === 'SELECTED') {
+        const checked = document.querySelectorAll('.push-member-checkbox:checked');
+        checked.forEach(cb => selectedMemberIds.push(cb.value));
+        if (selectedMemberIds.length === 0) {
+            if (window.toast) window.toast.warning('Vui lòng tích chọn ít nhất 1 hội viên nhận mã!');
+            else alert('Vui lòng tích chọn ít nhất 1 hội viên nhận mã!');
+            return;
+        }
+    }
+
+    let customGroupId = null;
+    if (targetType === 'CUSTOM_GROUP') {
+        customGroupId = document.getElementById('pushVoucherCustomGroupSelect')?.value;
+        if (!customGroupId) {
+            if (window.toast) window.toast.warning('Vui lòng chọn một nhóm đối tượng tùy chỉnh!');
+            else alert('Vui lòng chọn một nhóm đối tượng tùy chỉnh!');
+            return;
+        }
+    }
+
     const btn = document.getElementById('btnSubmitPushVoucher');
 
     if (!campaignId) {
@@ -2702,7 +2806,9 @@ window.submitPushVouchers = async function(event) {
                 minMonths,
                 randomLimit,
                 expiryDays,
-                customExpiryDate
+                customExpiryDate,
+                selectedMemberIds,
+                customGroupId
             })
         });
 
@@ -2725,6 +2831,451 @@ window.submitPushVouchers = async function(event) {
         alert('Không thể kết nối máy chủ!');
     } finally {
         if (btn) btn.disabled = false;
+    }
+};
+
+// ========================================================
+// QUẢN LÝ NHÓM ĐỐI TƯỢNG HỘI VIÊN (TARGET GROUPS)
+// ========================================================
+
+window._currentEditingTargetGroupId = null;
+window._targetGroupsList = [];
+
+window.openTargetGroupModal = async function() {
+    window.resetTargetGroupForm();
+    await window.ensurePushMembersLoaded();
+    window.renderTargetGroupMembersList();
+    await window.loadTargetGroups();
+
+    if (typeof window.openMemberModalElement === 'function') {
+        window.openMemberModalElement('manageTargetGroupModal');
+    } else {
+        const m = document.getElementById('manageTargetGroupModal');
+        if (m) {
+            m.classList.add('show');
+            m.style.display = 'block';
+            document.body.classList.add('modal-open');
+        }
+    }
+};
+
+window.loadTargetGroups = async function() {
+    const tbody = document.getElementById('targetGroupTableBody');
+    if (!tbody) return;
+    try {
+        const res = await fetch('/api/marketing/target-groups?t=' + Date.now());
+        const data = await res.json();
+        const groups = data.groups || [];
+        window._targetGroupsList = groups;
+
+        if (groups.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Chưa có nhóm đối tượng nào. Hãy tạo nhóm đầu tiên!</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = groups.map((g, idx) => {
+            const memberCount = Array.isArray(g.Member_ids) ? g.Member_ids.length : 0;
+            return `
+                <tr>
+                    <td class="text-center fw-bold text-secondary">${idx + 1}</td>
+                    <td class="fw-bold text-primary">${g.Group_name || ''}</td>
+                    <td class="text-secondary small">${g.Description || '<i class="text-muted">Không có mô tả</i>'}</td>
+                    <td class="text-center"><span class="badge bg-info-subtle text-info border">${memberCount} thành viên</span></td>
+                    <td class="text-center">
+                        <button class="btn btn-xs btn-outline-warning py-0 px-2 me-1" onclick="window.editTargetGroup(${g.Group_id})" title="Chỉnh sửa">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button class="btn btn-xs btn-outline-danger py-0 px-2" onclick="window.deleteTargetGroup(${g.Group_id})" title="Xóa">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Lỗi loadTargetGroups:', e);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-3">Lỗi tải danh sách nhóm</td></tr>';
+    }
+};
+
+window.loadTargetGroupsForSelect = async function() {
+    const sel = document.getElementById('pushVoucherCustomGroupSelect');
+    if (!sel) return;
+    try {
+        const res = await fetch('/api/marketing/target-groups?t=' + Date.now());
+        const data = await res.json();
+        const groups = data.groups || [];
+        window._targetGroupsList = groups;
+        sel.innerHTML = '<option value="">-- Chọn nhóm đối tượng đã tạo --</option>' +
+            groups.map(g => `<option value="${g.Group_id}">${g.Group_name} (${(g.Member_ids || []).length} hội viên)</option>`).join('');
+    } catch (e) {
+        console.error('Lỗi loadTargetGroupsForSelect:', e);
+    }
+};
+
+window.renderTargetGroupMembersList = function(list = null) {
+    const container = document.getElementById('targetGroupMemberList');
+    if (!container) return;
+    const members = list || window._cachedPushMembers || [];
+    if (members.length === 0) {
+        container.innerHTML = '<div class="text-muted small text-center py-2">Không tìm thấy hội viên nào</div>';
+        return;
+    }
+    const tierMap = {
+        'MAM_SEN': 'Mầm',
+        'BUP_SEN': 'Búp',
+        'SEN_HONG': 'Hồng',
+        'SEN_KIM_CUONG': 'K.Cương'
+    };
+    container.innerHTML = members.map(m => {
+        const mid = String(m.Member_id || m.id);
+        const name = m.Full_name || m.User_name || 'Khách';
+        const phone = m.Phone ? ` - ${m.Phone}` : '';
+        const tier = tierMap[m.Card_tier] || m.Card_tier || 'Mầm';
+        return `
+            <div class="form-check form-check-inline d-flex align-items-center mb-1 me-2 py-1 px-2 rounded" style="font-size: 13px; background: #fdfdfd; border: 1px solid #f0f0f0;">
+                <input class="form-check-input tg-member-checkbox me-2" type="checkbox" value="${mid}" id="tgm_${mid}" onchange="window.updateTargetGroupSelectedCount()">
+                <label class="form-check-label text-truncate cursor-pointer" for="tgm_${mid}" style="max-width: 240px;">
+                    <span class="fw-bold">${name}</span>
+                    <span class="text-muted small">${phone}</span>
+                    <span class="badge bg-light text-primary border ms-1" style="font-size: 10px;">${tier}</span>
+                </label>
+            </div>
+        `;
+    }).join('');
+    window.updateTargetGroupSelectedCount();
+};
+
+window.filterTargetGroupMembers = function(kw) {
+    const search = (kw || '').trim().toLowerCase();
+    if (!search) {
+        window.renderTargetGroupMembersList(window._cachedPushMembers);
+        return;
+    }
+    const filtered = (window._cachedPushMembers || []).filter(m => {
+        const name = (m.Full_name || m.User_name || '').toLowerCase();
+        const phone = (m.Phone || '').toLowerCase();
+        const code = (m.Card_code || '').toLowerCase();
+        return name.includes(search) || phone.includes(search) || code.includes(search);
+    });
+    window.renderTargetGroupMembersList(filtered);
+};
+
+window.targetGroupSelectAll = function(isAll) {
+    const checkboxes = document.querySelectorAll('.tg-member-checkbox');
+    checkboxes.forEach(cb => { cb.checked = isAll; });
+    window.updateTargetGroupSelectedCount();
+};
+
+window.updateTargetGroupSelectedCount = function() {
+    const checked = document.querySelectorAll('.tg-member-checkbox:checked');
+    const badge = document.getElementById('targetGroupSelectedCount');
+    if (badge) badge.innerText = checked.length;
+};
+
+window.resetTargetGroupForm = function() {
+    window._currentEditingTargetGroupId = null;
+    const titleEl = document.getElementById('targetGroupFormTitle');
+    if (titleEl) titleEl.innerText = 'Thêm Nhóm Đối Tượng Mới';
+    const idInput = document.getElementById('editTargetGroupId');
+    if (idInput) idInput.value = '';
+    const nameInput = document.getElementById('targetGroupNameInput');
+    if (nameInput) nameInput.value = '';
+    const descInput = document.getElementById('targetGroupDescInput');
+    if (descInput) descInput.value = '';
+    window.targetGroupSelectAll(false);
+};
+
+window.editTargetGroup = function(groupId) {
+    const group = (window._targetGroupsList || []).find(g => g.Group_id == groupId);
+    if (!group) return;
+    window._currentEditingTargetGroupId = groupId;
+    const titleEl = document.getElementById('targetGroupFormTitle');
+    if (titleEl) titleEl.innerText = `Chỉnh Sửa Nhóm: ${group.Group_name}`;
+    const idInput = document.getElementById('editTargetGroupId');
+    if (idInput) idInput.value = group.Group_id;
+    const nameInput = document.getElementById('targetGroupNameInput');
+    if (nameInput) nameInput.value = group.Group_name || '';
+    const descInput = document.getElementById('targetGroupDescInput');
+    if (descInput) descInput.value = group.Description || '';
+
+    const memberIds = (group.Member_ids || []).map(String);
+    const checkboxes = document.querySelectorAll('.tg-member-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = memberIds.includes(String(cb.value));
+    });
+    window.updateTargetGroupSelectedCount();
+};
+
+window.saveTargetGroup = async function() {
+    const name = document.getElementById('targetGroupNameInput')?.value?.trim();
+    const desc = document.getElementById('targetGroupDescInput')?.value?.trim() || '';
+    if (!name) {
+        if (window.toast) window.toast.warning('Vui lòng nhập tên nhóm đối tượng!');
+        else alert('Vui lòng nhập tên nhóm đối tượng!');
+        return;
+    }
+
+    const memberIds = [];
+    document.querySelectorAll('.tg-member-checkbox:checked').forEach(cb => {
+        memberIds.push(cb.value);
+    });
+
+    const isEdit = Boolean(window._currentEditingTargetGroupId);
+    const url = isEdit ? `/api/marketing/target-groups/${window._currentEditingTargetGroupId}` : '/api/marketing/target-groups';
+    const method = isEdit ? 'PUT' : 'POST';
+
+    try {
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                Group_name: name,
+                Description: desc,
+                Member_ids: memberIds
+            })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (window.toast) window.toast.success(data.message || 'Lưu nhóm đối tượng thành công!');
+            window.resetTargetGroupForm();
+            await window.loadTargetGroups();
+            await window.loadTargetGroupsForSelect();
+        } else {
+            alert('Lỗi lưu nhóm: ' + (data.error || 'Thao tác không thành công'));
+        }
+    } catch (e) {
+        console.error('Lỗi saveTargetGroup:', e);
+        alert('Không thể kết nối máy chủ!');
+    }
+};
+
+window.deleteTargetGroup = async function(groupId) {
+    if (!confirm('Bạn có chắc chắn muốn xóa nhóm đối tượng này?')) return;
+    try {
+        const res = await fetch(`/api/marketing/target-groups/${groupId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (window.toast) window.toast.success('Đã xóa nhóm đối tượng!');
+            if (window._currentEditingTargetGroupId == groupId) window.resetTargetGroupForm();
+            await window.loadTargetGroups();
+            await window.loadTargetGroupsForSelect();
+        } else {
+            alert('Lỗi xóa nhóm: ' + (data.error || 'Thao tác không thành công'));
+        }
+    } catch (e) {
+        console.error('Lỗi deleteTargetGroup:', e);
+        alert('Không thể kết nối máy chủ!');
+    }
+};
+
+// ========================================================
+// QUẢN LÝ LOẠI CHIẾN DỊCH (CAMPAIGN TYPES)
+// ========================================================
+
+window.allCampaignTypes = [];
+
+window.openManageCampaignTypesModal = async function() {
+    window.cancelEditCampaignType();
+    await window.loadCampaignTypes();
+    if (typeof window.openMemberModalElement === 'function') {
+        window.openMemberModalElement('manageCampaignTypesModal');
+    } else {
+        const m = document.getElementById('manageCampaignTypesModal');
+        if (m) {
+            m.classList.add('show');
+            m.style.display = 'block';
+            document.body.classList.add('modal-open');
+        }
+    }
+};
+
+window.loadCampaignTypes = async function() {
+    const tbody = document.getElementById('campaignTypesTableBody');
+    const select = document.getElementById('editMktType');
+    try {
+        const res = await fetch('/api/marketing/campaign-types?t=' + Date.now());
+        const data = await res.json();
+        const types = data.types || [];
+        window.allCampaignTypes = types;
+
+        if (tbody) {
+            if (types.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">Chưa có loại chiến dịch nào</td></tr>';
+            } else {
+                tbody.innerHTML = types.map(t => {
+                    const displayName = t.name || t.label || t.code;
+                    const descText = t.desc ? `<div class="text-muted small mt-1" style="font-size: 11px;">${t.desc}</div>` : '';
+                    const badgeType = t.isCustom 
+                        ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1" style="font-size: 10px;">Tự tạo</span>`
+                        : (t.isEdited 
+                            ? `<span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1" style="font-size: 10px;">Đã sửa</span>`
+                            : `<span class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size: 10px;">Mặc định</span>`);
+
+                    return `
+                        <tr>
+                            <td>
+                                <span class="font-monospace fw-bold text-dark">${t.code}</span>
+                                ${badgeType}
+                            </td>
+                            <td>
+                                <div class="fw-semibold text-dark">${displayName}</div>
+                                ${descText}
+                            </td>
+                            <td class="text-center text-nowrap">
+                                <button type="button" class="btn btn-xs btn-primary text-white py-1 px-2 rounded-pill me-1 fw-bold shadow-sm" onclick="window.editCampaignType('${t.code}')" title="Sửa loại chiến dịch" style="font-size: 11px;">
+                                    <i class="fa-solid fa-pen-to-square me-1"></i>Sửa
+                                </button>
+                                ${t.isCustom ? `
+                                    <button type="button" class="btn btn-xs btn-danger text-white py-1 px-2 rounded-pill fw-bold shadow-sm" onclick="window.deleteCampaignType('${t.code}')" title="Xóa loại" style="font-size: 11px;">
+                                        <i class="fa-solid fa-trash me-1"></i>Xóa
+                                    </button>
+                                ` : (t.isEdited ? `
+                                    <button type="button" class="btn btn-xs btn-warning text-dark py-1 px-2 rounded-pill fw-bold shadow-sm" onclick="window.deleteCampaignType('${t.code}')" title="Khôi phục mặc định" style="font-size: 11px;">
+                                        <i class="fa-solid fa-rotate-left me-1"></i>Khôi phục
+                                    </button>
+                                ` : `
+                                    <span class="badge bg-light text-muted border px-2 py-1" style="font-size: 11px;" title="Loại mặc định của hệ thống"><i class="fa-solid fa-lock me-1"></i>Mặc định</span>
+                                `)}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        if (select) {
+            const curVal = select.value;
+            select.innerHTML = types.map(t => `<option value="${t.code}">${t.name || t.label || t.code}</option>`).join('');
+            if (curVal && types.some(t => t.code === curVal)) {
+                select.value = curVal;
+            }
+        }
+    } catch (e) {
+        console.error('Lỗi loadCampaignTypes:', e);
+    }
+};
+
+window.editCampaignType = function(code) {
+    const t = (window.allCampaignTypes || []).find(x => x.code === code);
+    if (!t) return;
+
+    const codeInput = document.getElementById('newCampaignTypeCode');
+    const labelInput = document.getElementById('newCampaignTypeLabel');
+    const descInput = document.getElementById('newCampaignTypeDesc');
+    const origInput = document.getElementById('editingCampaignTypeOriginalCode');
+    const formTitle = document.getElementById('campaignTypeFormTitle');
+    const btnCancel = document.getElementById('btnCancelEditCampaignType');
+    const btnSave = document.getElementById('btnSaveCampaignType');
+    const btnSaveText = document.getElementById('btnSaveCampaignTypeText');
+    const btnSaveIcon = document.getElementById('btnSaveCampaignTypeIcon');
+
+    if (codeInput) codeInput.value = t.code;
+    if (labelInput) labelInput.value = t.name || t.label || t.code;
+    if (descInput) descInput.value = t.desc || '';
+    if (origInput) origInput.value = t.code;
+
+    if (formTitle) formTitle.innerHTML = `<i class="fa-solid fa-pen-to-square text-primary me-1"></i>Sửa loại chiến dịch [${t.code}]:`;
+    if (btnCancel) btnCancel.classList.remove('d-none');
+    if (btnSave) {
+        btnSave.classList.remove('btn-success');
+        btnSave.classList.add('btn-primary');
+    }
+    if (btnSaveText) btnSaveText.innerText = 'Lưu Thay Đổi';
+    if (btnSaveIcon) {
+        btnSaveIcon.className = 'fa-solid fa-check me-1';
+    }
+
+    if (labelInput) labelInput.focus();
+};
+
+window.cancelEditCampaignType = function() {
+    const codeInput = document.getElementById('newCampaignTypeCode');
+    const labelInput = document.getElementById('newCampaignTypeLabel');
+    const descInput = document.getElementById('newCampaignTypeDesc');
+    const origInput = document.getElementById('editingCampaignTypeOriginalCode');
+    const formTitle = document.getElementById('campaignTypeFormTitle');
+    const btnCancel = document.getElementById('btnCancelEditCampaignType');
+    const btnSave = document.getElementById('btnSaveCampaignType');
+    const btnSaveText = document.getElementById('btnSaveCampaignTypeText');
+    const btnSaveIcon = document.getElementById('btnSaveCampaignTypeIcon');
+
+    if (codeInput) codeInput.value = '';
+    if (labelInput) labelInput.value = '';
+    if (descInput) descInput.value = '';
+    if (origInput) origInput.value = '';
+
+    if (formTitle) formTitle.innerHTML = `<i class="fa-solid fa-plus-circle text-success me-1"></i>Thêm loại chiến dịch mới:`;
+    if (btnCancel) btnCancel.classList.add('d-none');
+    if (btnSave) {
+        btnSave.classList.remove('btn-primary');
+        btnSave.classList.add('btn-success');
+    }
+    if (btnSaveText) btnSaveText.innerText = 'Thêm Loại';
+    if (btnSaveIcon) {
+        btnSaveIcon.className = 'fa-solid fa-plus me-1';
+    }
+};
+
+window.saveCampaignType = async function() {
+    const code = document.getElementById('newCampaignTypeCode')?.value?.trim()?.toUpperCase();
+    const label = document.getElementById('newCampaignTypeLabel')?.value?.trim();
+    const desc = document.getElementById('newCampaignTypeDesc')?.value?.trim() || '';
+    const originalCode = document.getElementById('editingCampaignTypeOriginalCode')?.value?.trim();
+
+    if (!code || !label) {
+        if (window.toast) window.toast.warning('Vui lòng nhập đầy đủ mã và tên loại chiến dịch!');
+        else alert('Vui lòng nhập đầy đủ mã và tên loại chiến dịch!');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/marketing/campaign-types', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, name: label, label, desc, originalCode })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (window.toast) window.toast.success(data.message || 'Lưu loại chiến dịch thành công!');
+            window.cancelEditCampaignType();
+            await window.loadCampaignTypes();
+        } else {
+            const err = data.error || 'Thao tác không thành công';
+            if (window.toast) window.toast.error('Lỗi: ' + err);
+            else alert('Lỗi: ' + err);
+        }
+    } catch (e) {
+        console.error('Lỗi saveCampaignType:', e);
+        if (window.toast) window.toast.error('Không thể kết nối máy chủ!');
+        else alert('Không thể kết nối máy chủ!');
+    }
+};
+
+window.deleteCampaignType = async function(code) {
+    const t = (window.allCampaignTypes || []).find(x => x.code === code);
+    const isEditedDefault = t && t.isEdited;
+    const msg = isEditedDefault 
+        ? `Bạn có chắc muốn khôi phục tên mặc định cho loại chiến dịch [${code}]?`
+        : `Bạn có chắc muốn xóa loại chiến dịch [${code}]?`;
+
+    if (!confirm(msg)) return;
+    try {
+        const res = await fetch(`/api/marketing/campaign-types/${encodeURIComponent(code)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (window.toast) window.toast.success(data.message || 'Thao tác thành công!');
+            window.cancelEditCampaignType();
+            await window.loadCampaignTypes();
+        } else {
+            const err = data.error || 'Thao tác không thành công';
+            if (window.toast) window.toast.error('Lỗi: ' + err);
+            else alert('Lỗi: ' + err);
+        }
+    } catch (e) {
+        console.error('Lỗi deleteCampaignType:', e);
+        if (window.toast) window.toast.error('Không thể kết nối máy chủ!');
+        else alert('Không thể kết nối máy chủ!');
     }
 };
 

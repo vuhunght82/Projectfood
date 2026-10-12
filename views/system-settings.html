@@ -2454,13 +2454,21 @@ Xin cảm ơn & Hẹn gặp lại Quý Khách!</textarea>
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold text-secondary mb-1">Loại chiến dịch: <span class="text-danger">*</span></label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small fw-bold text-secondary m-0">Loại chiến dịch: <span class="text-danger">*</span></label>
+                                <button type="button" class="btn btn-link p-0 text-success small text-decoration-none fw-bold" onclick="window.openManageCampaignTypesModal()" style="font-size: 11px;">
+                                    <i class="fa-solid fa-gear me-1"></i> Quản lý loại
+                                </button>
+                            </div>
                             <select id="editMktType" class="form-select form-select-sm" onchange="window.handleCampaignTypeChange(this.value)">
                                 <option value="BILL_AMOUNT">💰 Giảm theo hóa đơn tối thiểu</option>
                                 <option value="COMBO">🍱 Giảm giá theo Combo</option>
                                 <option value="DAY_OF_WEEK">📅 Giảm theo thứ ngày (Mùng 1/Rằm/Thứ 2..)</option>
                                 <option value="EVENT">🎉 Theo sự kiện / Lễ hội</option>
                                 <option value="MEMBER_TENURE">⭐ Ưu đãi theo thâm niên thẻ (>3/6/12 tháng)</option>
+                                <option value="BIRTHDAY">🎂 Ưu đãi sinh nhật thành viên</option>
+                                <option value="HAPPY_HOUR">⏰ Giờ vàng giảm giá</option>
+                                <option value="FREE_ITEM">🎁 Tặng món / Quà tri ân</option>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -2626,12 +2634,46 @@ Xin cảm ơn & Hẹn gặp lại Quý Khách!</textarea>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-secondary mb-1">Đối tượng nhận mã:</label>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold text-secondary mb-0">Đối tượng nhận mã:</label>
+                            <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 rounded-pill small" onclick="window.openTargetGroupModal()">
+                                <i class="fa-solid fa-layer-group me-1"></i>Quản lý nhóm
+                            </button>
+                        </div>
                         <select id="pushVoucherTargetType" class="form-select form-select-sm" onchange="window.handlePushTargetChange(this.value)">
                             <option value="ALL">Tất cả hội viên trong hệ thống</option>
+                            <option value="SELECTED">👥 Tự chọn từng hội viên cụ thể...</option>
+                            <option value="BIRTHDAY">🎂 Hội viên sinh nhật trong tháng</option>
+                            <option value="HAS_EMAIL">📧 Hội viên có thông tin Email</option>
+                            <option value="CUSTOM_GROUP">🏷️ Nhóm đối tượng tùy chỉnh...</option>
                             <option value="TIER">Phân theo hạng thẻ</option>
                             <option value="TENURE">Hội viên có thẻ trên 3 / 6 / 12 tháng</option>
                             <option value="RANDOM">Nhóm ngẫu nhiên (May mắn)</option>
+                        </select>
+                    </div>
+
+                    <!-- Danh sách chọn thủ công -->
+                    <div class="mb-3 p-3 bg-light rounded-3 border" id="pushVoucherSelectedWrap" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-bold text-primary"><i class="fa-solid fa-users-viewfinder me-1"></i> Tích chọn hội viên:</span>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" onclick="window.selectAllPushMembers(true)">Chọn tất cả</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="window.selectAllPushMembers(false)">Bỏ chọn</button>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <input type="text" id="pushVoucherMemberSearch" class="form-control form-control-sm" placeholder="🔍 Tìm theo tên, số điện thoại, mã thẻ..." oninput="window.filterPushMemberList(this.value)">
+                        </div>
+                        <div id="pushVoucherMemberList" class="border rounded bg-white p-2" style="max-height: 180px; overflow-y: auto;">
+                            <!-- Danh sách checkbox hội viên -->
+                        </div>
+                    </div>
+
+                    <!-- Chọn nhóm tùy chỉnh -->
+                    <div class="mb-3" id="pushVoucherCustomGroupWrap" style="display: none;">
+                        <label class="form-label small fw-bold text-secondary mb-1">Chọn nhóm đối tượng đã tạo:</label>
+                        <select id="pushVoucherCustomGroupSelect" class="form-select form-select-sm">
+                            <option value="">-- Chưa chọn nhóm --</option>
                         </select>
                     </div>
 
@@ -3342,6 +3384,160 @@ Xin cảm ơn & Hẹn gặp lại Quý Khách!</textarea>
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: QUẢN LÝ NHÓM ĐỐI TƯỢNG NHẬN MÃ (TARGET GROUPS)                      -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="manageTargetGroupModal" tabindex="-1" style="z-index: 1065;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-primary text-white py-3">
+                <h5 class="modal-title fw-bold fs-6">
+                    <i class="fa-solid fa-layer-group me-2"></i>Quản Lý Nhóm Đối Tượng Hội Viên
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('manageTargetGroupModal')"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- FORM THÊM / SỬA NHÓM -->
+                <div class="card border border-primary-subtle rounded-3 p-3 mb-4 bg-light">
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="fa-solid fa-circle-plus me-1"></i><span id="targetGroupFormTitle">Thêm Nhóm Đối Tượng Mới</span>
+                    </h6>
+                    <input type="hidden" id="editTargetGroupId" value="">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold text-secondary mb-1">Tên nhóm: <span class="text-danger">*</span></label>
+                            <input type="text" id="targetGroupNameInput" class="form-control form-control-sm" placeholder="VD: Khách hàng thân thiết cuối tuần..." required>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold text-secondary mb-1">Mô tả / Ghi chú:</label>
+                            <input type="text" id="targetGroupDescInput" class="form-control form-control-sm" placeholder="VD: Dành cho khách hay đặt bàn tối thứ 7">
+                        </div>
+                    </div>
+                    
+                    <!-- DANH SÁCH CHỌN THÀNH VIÊN VÀO NHÓM -->
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold text-secondary mb-0">Thành viên trong nhóm (<span id="targetGroupSelectedCount">0</span> đã chọn):</label>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size: 11px;" onclick="window.targetGroupSelectAll(true)">Chọn tất cả</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 11px;" onclick="window.targetGroupSelectAll(false)">Bỏ chọn</button>
+                            </div>
+                        </div>
+                        <input type="text" id="targetGroupMemberSearch" class="form-control form-control-sm mb-2" placeholder="🔍 Lọc tìm hội viên theo tên, SĐT..." oninput="window.filterTargetGroupMembers(this.value)">
+                        <div id="targetGroupMemberList" class="border rounded bg-white p-2" style="max-height: 160px; overflow-y: auto;">
+                            <!-- Danh sách hội viên checkbox -->
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="window.resetTargetGroupForm()">Làm mới</button>
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold" onclick="window.saveTargetGroup()">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> Lưu Nhóm
+                        </button>
+                    </div>
+                </div>
+
+                <!-- DANH SÁCH CÁC NHÓM ĐÃ TẠO -->
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark mb-0"><i class="fa-solid fa-list-check me-1 text-secondary"></i> Danh Sách Nhóm Đối Tượng Hiện Có:</h6>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="window.loadTargetGroups()"><i class="fa-solid fa-arrows-rotate me-1"></i>Tải lại</button>
+                </div>
+                <div class="table-responsive border rounded-3 bg-white">
+                    <table class="table table-hover table-sm align-middle mb-0" style="font-size: 13px;">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center" style="width: 50px;">STT</th>
+                                <th>Tên Nhóm</th>
+                                <th>Mô tả</th>
+                                <th class="text-center" style="width: 120px;">Số thành viên</th>
+                                <th class="text-center" style="width: 120px;">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody id="targetGroupTableBody">
+                            <tr><td colspan="5" class="text-center text-muted py-3">Đang tải danh sách...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('manageTargetGroupModal')">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: QUẢN LÝ LOẠI CHIẾN DỊCH (CAMPAIGN TYPES)                           -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="manageCampaignTypesModal" tabindex="-1" style="z-index: 1065;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-dark text-white py-3">
+                <h5 class="modal-title fw-bold fs-6">
+                    <i class="fa-solid fa-tags me-2 text-warning"></i>Quản Lý Loại Chiến Dịch Marketing
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('manageCampaignTypesModal')"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- FORM THÊM & SỬA LOẠI -->
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold text-dark mb-0 small" id="campaignTypeFormTitle">
+                            <i class="fa-solid fa-plus-circle text-success me-1"></i>Thêm loại chiến dịch mới:
+                        </h6>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-2 d-none" id="btnCancelEditCampaignType" onclick="window.cancelEditCampaignType()" style="font-size: 11px;">
+                            <i class="fa-solid fa-xmark me-1"></i>Hủy chỉnh sửa
+                        </button>
+                    </div>
+                    <input type="hidden" id="editingCampaignTypeOriginalCode" value="">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-secondary mb-1">Mã loại (Code) *</label>
+                            <input type="text" id="newCampaignTypeCode" class="form-control form-control-sm text-uppercase fw-bold font-monospace" placeholder="VD: VIP_PROMO" required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold text-secondary mb-1">Tên hiển thị *</label>
+                            <input type="text" id="newCampaignTypeLabel" class="form-control form-control-sm" placeholder="VD: 🌟 Ưu đãi VIP Tri Ân Khách Hàng" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-secondary mb-1">Mô tả / Ghi chú (tùy chọn)</label>
+                            <input type="text" id="newCampaignTypeDesc" class="form-control form-control-sm" placeholder="Mô tả tóm tắt về loại chiến dịch này...">
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-bold" id="btnSaveCampaignType" onclick="window.saveCampaignType()">
+                            <i class="fa-solid fa-plus me-1" id="btnSaveCampaignTypeIcon"></i><span id="btnSaveCampaignTypeText">Thêm Loại</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- BẢNG DANH SÁCH LOẠI CHIẾN DỊCH -->
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark mb-0 small"><i class="fa-solid fa-list me-1 text-secondary"></i>Danh sách các loại hiện có:</h6>
+                    <small class="text-muted" style="font-size: 11px;">(Bấm nút <b>Sửa</b> để chỉnh sửa tên/mô tả, <b>Xóa</b> để gỡ bỏ)</small>
+                </div>
+                <div class="table-responsive border rounded-3 bg-white" style="max-height: 280px; overflow-y: auto;">
+                    <table class="table table-hover table-sm align-middle mb-0" style="font-size: 13px;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 130px;">Mã loại</th>
+                                <th>Tên hiển thị & Mô tả</th>
+                                <th class="text-center" style="width: 160px;">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="campaignTypesTableBody">
+                            <tr><td colspan="3" class="text-center text-muted py-3">Đang tải danh sách...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('manageCampaignTypesModal')">Đóng</button>
+            </div>
         </div>
     </div>
 </div>

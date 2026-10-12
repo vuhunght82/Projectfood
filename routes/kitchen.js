@@ -281,20 +281,8 @@ router.put('/deliver-order/:id', (req, res) => {
             }
         }
 
-        // Đồng bộ giải phóng bàn ăn nếu đơn thuộc về bàn
-        if (orderInfo && orderInfo.Table_number) {
-            try {
-                const cleanTable = orderInfo.Table_number.replace(/^Bàn\s*/i, 'B').trim();
-                db.prepare(`
-                    UPDATE DINING_TABLES
-                    SET Status = 'EMPTY', Current_order_id = NULL, Current_order_code = NULL, Current_amount = 0, Payment_status = 'UNPAID', Current_guests = 0, Updated_at = datetime('now', 'localtime')
-                    WHERE (LOWER(Table_name) = LOWER(?) OR LOWER(Table_code) = LOWER(?) OR LOWER(Table_name) = LOWER(?))
-                      AND (Current_order_id = ? OR Current_order_code = ?)
-                `).run(orderInfo.Table_number, orderInfo.Table_number, cleanTable, orderInfo.Order_id, orderInfo.Order_code);
-            } catch (tblErr) {
-                console.error('Lỗi cập nhật bàn khi deliver đơn:', tblErr.message);
-            }
-        }
+        // LƯU Ý: Bồi bàn xác nhận trả món chỉ ghi nhận phục vụ (KPI), KHÔNG tự làm bàn trống.
+        // Khách vẫn đang ngồi dùng bữa tại bàn. Bàn chỉ được dọn trống khi nhân viên chủ động bấm nút "Dọn bàn".
 
         db.close();
 
@@ -305,8 +293,6 @@ router.put('/deliver-order/:id', (req, res) => {
                 Order_code: orderInfo ? orderInfo.Order_code : orderIdentifier, 
                 Status: 'COMPLETED' 
             });
-            io.emit('table_updated', { Table_name: orderInfo ? orderInfo.Table_number : null, Status: 'EMPTY' });
-            io.emit('tables_list_changed');
             emitOrderBadgeCounts(io);
         }
 

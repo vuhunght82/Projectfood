@@ -720,19 +720,116 @@ try {
             Client_ip TEXT,
             User_agent TEXT,
             Session_token TEXT,
-            Login_time DATETIME DEFAULT (datetime('now', 'localtime'))
+            Login_time DATETIME DEFAULT (datetime('now', 'localtime')),
+            Last_activity DATETIME DEFAULT (datetime('now', 'localtime'))
         );
     `);
     const cols = db.prepare("PRAGMA table_info(ACTIVE_SESSIONS)").all();
     if (!cols.some(c => c.name === 'Session_token')) {
         db.exec("ALTER TABLE ACTIVE_SESSIONS ADD COLUMN Session_token TEXT;");
     }
+    if (!cols.some(c => c.name === 'Last_activity')) {
+        db.exec("ALTER TABLE ACTIVE_SESSIONS ADD COLUMN Last_activity DATETIME;");
+    }
+
+    // Tạo bảng MARKETING_TARGET_GROUPS (Quản lý nhóm đối tượng nhận mã ưu đãi)
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS MARKETING_TARGET_GROUPS (
+            Group_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            Description TEXT,
+            Member_ids TEXT,
+            Created_at DATETIME DEFAULT (datetime('now', 'localtime'))
+        );
+    `);
 } catch(e) {
-    console.error('Lỗi khởi tạo ACTIVE_SESSIONS:', e.message);
+    console.error('Lỗi khởi tạo ACTIVE_SESSIONS / MARKETING_TARGET_GROUPS:', e.message);
 }
 
 // Quản lý phiên đăng nhập nhân viên/admin thời gian thực (Đơn máy / Đa máy)
 const activeStaffSessions = new Map(); // Key: userId / username (string), Value: { ip, userAgent, loginTime, sessionToken, socketId }
+
+// Cơ chế tự động đẩy phiên / kết thúc phiên khi không còn hoạt động (Tránh online mãi mãi)
+function autoExpireInactiveSessions() {
+    try {
+        let timeoutMinutes = 30; // Mặc định 30 phút nếu không có hoạt động
+        try {
+            const row = db.prepare("SELECT Value FROM SYSTEM_CONFIG WHERE Key = 'session_timeout_minutes'").get();
+            if (row && row.Value) {
+                const val = parseInt(JSON.parse(row.Value), 10);
+                if (!isNaN(val) && val >= 5) timeoutMinutes = val;
+            }
+        } catch(eT) {}
+
+        // 1. Quét các phiên trong ACTIVE_SESSIONS không có heartbeat vượt quá timeoutMinutes
+        const expiredSessions = db.prepare(`
+            SELECT * FROM ACTIVE_SESSIONS 
+            WHERE (
+                (Last_activity IS NOT NULL AND (strftime('%s', 'now', 'localtime') - strftime('%s', Last_activity)) > (? * 60))
+                OR (Last_activity IS NULL AND (strftime('%s', 'now', 'localtime') - strftime('%s', Login_time)) > (? * 60))
+            )
+        `).all(timeoutMinutes, timeoutMinutes);
+
+        if (expiredSessions.length > 0) {
+            for (const sess of expiredSessions) {
+                const uid = String(sess.User_id || '');
+                const uKey = String(sess.Username || '').toLowerCase();
+
+                // Cập nhật trạng thái trong LOGIN_HISTORY thành LOGGED_OUT
+                db.prepare(`
+                    UPDATE LOGIN_HISTORY 
+                    SET Status = 'LOGGED_OUT', Logout_time = datetime('now', 'localtime'), Note = COALESCE(Note, '') || ' [Tự động ngắt phiên do hết thời gian chờ]'
+                    WHERE (User_id = ? OR LOWER(Username) = ?) AND Status = 'SUCCESS'
+                `).run(uid, uKey);
+
+                // Xóa khỏi ACTIVE_SESSIONS và bộ nhớ
+                db.prepare("DELETE FROM ACTIVE_SESSIONS WHERE User_id = ? OR LOWER(Username) = ?").run(uid, uKey);
+                activeStaffSessions.delete(uid);
+                if (uKey) activeStaffSessions.delete(uKey);
+            }
+
+            if (typeof io !== 'undefined' && io) {
+                io.emit('login_history_updated');
+            }
+        }
+
+        // 2. Dọn dẹp triệt để: Đảm bảo các tài khoản đơn máy KHÔNG BAO GIỜ có quá 1 dòng SUCCESS trong LOGIN_HISTORY
+        const duplicateSuccessUsers = db.prepare(`
+            SELECT LOWER(Username) as uname, COUNT(*) as cnt 
+            FROM LOGIN_HISTORY 
+            WHERE Status = 'SUCCESS' 
+            GROUP BY LOWER(Username) 
+            HAVING cnt > 1
+        `).all();
+
+        for (const dup of duplicateSuccessUsers) {
+            // Giữ lại bản ghi mới nhất (MAX(History_id)), ngắt các bản ghi cũ
+            db.prepare(`
+                UPDATE LOGIN_HISTORY 
+                SET Status = 'FORCE_LOGGED_OUT', Logout_time = datetime('now', 'localtime')
+                WHERE LOWER(Username) = ? AND Status = 'SUCCESS' AND History_id NOT IN (
+                    SELECT MAX(History_id) FROM LOGIN_HISTORY WHERE LOWER(Username) = ? AND Status = 'SUCCESS'
+                )
+            `).run(dup.uname, dup.uname);
+        }
+
+        // 3. Ngắt các phiên LOGIN_HISTORY bị treo quá 12 giờ
+        const oldHangs = db.prepare(`
+            UPDATE LOGIN_HISTORY 
+            SET Status = 'LOGGED_OUT', Logout_time = datetime('now', 'localtime'), Note = COALESCE(Note, '') || ' [Tự động ngắt phiên quá hạn]'
+            WHERE Status = 'SUCCESS' AND (strftime('%s', 'now', 'localtime') - strftime('%s', Login_time)) > 43200
+        `).run();
+
+        if ((duplicateSuccessUsers.length > 0 || oldHangs.changes > 0) && typeof io !== 'undefined' && io) {
+            io.emit('login_history_updated');
+        }
+    } catch(eExp) {
+        console.error('Lỗi autoExpireInactiveSessions:', eExp.message);
+    }
+}
+// Chạy ngay khi khởi động và định kỳ mỗi 60 giây
+setTimeout(autoExpireInactiveSessions, 2000);
+setInterval(autoExpireInactiveSessions, 60000);
 
 // Hàm kiểm tra một tài khoản có đang áp dụng chính sách 1 máy (SINGLE) hay không
 function isUserSingleDeviceMode(userId, username) {
@@ -1435,40 +1532,77 @@ function performShiftCleanup(manualTrigger = false) {
             }
         }
 
-        // 3. Giải phóng bàn trong DINING_TABLES
-        const allTables = db.prepare("SELECT Table_id, Table_name, Table_code, Status, Current_order_id, Current_order_code FROM DINING_TABLES").all();
-        const activeTodayOrders = db.prepare(`
-            SELECT Order_id, Order_code, Table_number, Table_name
-            FROM ORDERS
-            WHERE UPPER(Status) NOT IN ('COMPLETED', 'SERVED', 'CANCELLED', 'CANCELED')
-              AND date(Created_at) = date('now', 'localtime')
-        `).all();
+        // 3. Giải phóng bàn trong DINING_TABLES (CHỈ KHI HẾT CA LÀM VIỆC HOẶC BẤM DỌN THỦ CÔNG)
+        // Trong ca làm việc: Tuyệt đối KHÔNG tự động giải phóng bàn khi đơn chuyển sang SERVED/COMPLETED!
+        // Bàn chỉ được dọn trống khi nhân viên trực tiếp bấm nút "Dọn bàn" trên màn hình.
+        if (shouldCleanShift || manualTrigger) {
+            const allTables = db.prepare("SELECT Table_id, Table_name, Table_code, Status, Current_order_id, Current_order_code FROM DINING_TABLES").all();
+            const activeTodayOrders = db.prepare(`
+                SELECT Order_id, Order_code, Table_number, Table_name
+                FROM ORDERS
+                WHERE UPPER(Status) NOT IN ('COMPLETED', 'SERVED', 'CANCELLED', 'CANCELED')
+                  AND date(Created_at) = date('now', 'localtime')
+            `).all();
 
-        const resetTableStmt = db.prepare(`
-            UPDATE DINING_TABLES 
-            SET Status = 'EMPTY', 
-                Current_order_id = NULL, 
-                Current_order_code = NULL, 
-                Current_amount = 0, 
-                Payment_status = 'UNPAID', 
-                Current_guests = 0, 
-                Updated_at = datetime('now', 'localtime')
-            WHERE Table_id = ?
-        `);
+            const resetTableStmt = db.prepare(`
+                UPDATE DINING_TABLES 
+                SET Status = 'EMPTY', 
+                    Current_order_id = NULL, 
+                    Current_order_code = NULL, 
+                    Current_amount = 0, 
+                    Payment_status = 'UNPAID', 
+                    Current_guests = 0, 
+                    Updated_at = datetime('now', 'localtime')
+                WHERE Table_id = ?
+            `);
 
-        allTables.forEach(tbl => {
-            const tName = String(tbl.Table_name || '').toLowerCase().trim();
-            const tCode = String(tbl.Table_code || '').toLowerCase().trim();
-            const hasValidActiveOrder = activeTodayOrders.some(o => {
-                const oTable = String(o.Table_number || o.Table_name || '').toLowerCase().trim();
-                return oTable === tName || oTable === tCode || (oTable && (tName.includes(oTable) || oTable.includes(tName)));
+            allTables.forEach(tbl => {
+                const tName = String(tbl.Table_name || '').toLowerCase().trim();
+                const tCode = String(tbl.Table_code || '').toLowerCase().trim();
+                const hasValidActiveOrder = activeTodayOrders.some(o => {
+                    const oTable = String(o.Table_number || o.Table_name || '').toLowerCase().trim();
+                    return oTable === tName || oTable === tCode || (oTable && (tName.includes(oTable) || oTable.includes(tName)));
+                });
+
+                if (!hasValidActiveOrder && (tbl.Status === 'SERVING' || tbl.Current_order_id)) {
+                    resetTableStmt.run(tbl.Table_id);
+                    cleanedTablesCount++;
+                }
             });
+        } else if (autoClearPrev) {
+            // Khi qua ngày mới (autoClearPrev) nhưng đang trong giờ hoạt động:
+            // Chỉ dọn các bàn tồn từ ngày hôm TRƯỚC mà hôm nay hoàn toàn không phát sinh đơn mới
+            const allTables = db.prepare("SELECT Table_id, Table_name, Table_code, Status, Current_order_id, Current_order_code FROM DINING_TABLES WHERE Status = 'SERVING' OR Current_order_id IS NOT NULL").all();
+            const todayOrders = db.prepare(`
+                SELECT Table_number, Table_name FROM ORDERS WHERE date(Created_at) = date('now', 'localtime')
+            `).all();
 
-            if (!hasValidActiveOrder && (tbl.Status === 'SERVING' || tbl.Current_order_id)) {
-                resetTableStmt.run(tbl.Table_id);
-                cleanedTablesCount++;
-            }
-        });
+            const resetTableStmt = db.prepare(`
+                UPDATE DINING_TABLES 
+                SET Status = 'EMPTY', 
+                    Current_order_id = NULL, 
+                    Current_order_code = NULL, 
+                    Current_amount = 0, 
+                    Payment_status = 'UNPAID', 
+                    Current_guests = 0, 
+                    Updated_at = datetime('now', 'localtime')
+                WHERE Table_id = ?
+            `);
+
+            allTables.forEach(tbl => {
+                const tName = String(tbl.Table_name || '').toLowerCase().trim();
+                const tCode = String(tbl.Table_code || '').toLowerCase().trim();
+                const hasOrderToday = todayOrders.some(o => {
+                    const oTable = String(o.Table_number || o.Table_name || '').toLowerCase().trim();
+                    return oTable === tName || oTable === tCode || (oTable && (tName.includes(oTable) || oTable.includes(tName)));
+                });
+
+                if (!hasOrderToday) {
+                    resetTableStmt.run(tbl.Table_id);
+                    cleanedTablesCount++;
+                }
+            });
+        }
 
         if (cleanedOrdersCount > 0 || cleanedTablesCount > 0) {
             console.log(`[ShiftCleanup] Đã dọn sạch ${cleanedOrdersCount} đơn treo & giải phóng ${cleanedTablesCount} bàn.`);
@@ -2031,10 +2165,14 @@ app.post('/api/login', (req, res) => {
                             });
                         }
 
+                        // Khởi tạo Token định danh phiên đăng nhập duy nhất cho thiết bị này trước
+                        sessionToken = 'hs_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
                         // Nếu người dùng chọn Đẩy phiên (forceLogout === true) -> Gửi lệnh logout đến máy cũ qua Socket.IO
                         io.emit('force_logout_user', {
                             userId: userIdStr,
                             username: user.User_name,
+                            newSessionToken: sessionToken,
                             reason: 'Tài khoản của bạn vừa được đăng nhập trên một thiết bị khác.'
                         });
 
@@ -2042,10 +2180,29 @@ app.post('/api/login', (req, res) => {
                         try {
                             db.prepare("DELETE FROM ACTIVE_SESSIONS WHERE User_id = ? OR LOWER(Username) = ?").run(userIdStr, usernameKey);
                         } catch(eDel) {}
+
+                        // CẬP NHẬT CÁC PHIÊN CŨ TRONG LOGIN_HISTORY THÀNH FORCE_LOGGED_OUT!
+                        try {
+                            db.prepare(`
+                                UPDATE LOGIN_HISTORY 
+                                SET Status = 'FORCE_LOGGED_OUT', Logout_time = datetime('now', 'localtime') 
+                                WHERE (User_id = ? OR LOWER(Username) = ?) AND Status = 'SUCCESS'
+                            `).run(userIdStr, usernameKey);
+                        } catch(eH) {}
                     }
 
-                    // Khởi tạo Token định danh phiên đăng nhập duy nhất cho thiết bị này
-                    sessionToken = 'hs_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+                    if (!sessionToken) {
+                        sessionToken = 'hs_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+                    }
+
+                    // Đảm bảo không còn bất kỳ dòng cũ nào của tài khoản đơn máy này còn treo SUCCESS
+                    try {
+                        db.prepare(`
+                            UPDATE LOGIN_HISTORY 
+                            SET Status = 'FORCE_LOGGED_OUT', Logout_time = datetime('now', 'localtime') 
+                            WHERE (User_id = ? OR LOWER(Username) = ?) AND Status = 'SUCCESS'
+                        `).run(userIdStr, usernameKey);
+                    } catch(eClean) {}
 
                     // Cập nhật phiên đăng nhập mới nhất vào bộ nhớ và CSDL
                     const sessObj = {
@@ -2059,8 +2216,8 @@ app.post('/api/login', (req, res) => {
 
                     try {
                         db.prepare(`
-                            INSERT INTO ACTIVE_SESSIONS (User_id, Username, Full_name, Role, Client_ip, User_agent, Session_token, Login_time)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+                            INSERT INTO ACTIVE_SESSIONS (User_id, Username, Full_name, Role, Client_ip, User_agent, Session_token, Login_time, Last_activity)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
                             ON CONFLICT(User_id) DO UPDATE SET 
                                 Username = excluded.Username,
                                 Full_name = excluded.Full_name,
@@ -2068,7 +2225,8 @@ app.post('/api/login', (req, res) => {
                                 Client_ip = excluded.Client_ip,
                                 User_agent = excluded.User_agent,
                                 Session_token = excluded.Session_token,
-                                Login_time = excluded.Login_time
+                                Login_time = excluded.Login_time,
+                                Last_activity = excluded.Last_activity
                         `).run(userIdStr, user.User_name || '', fullName, role, sessObj.ip, sessObj.userAgent, sessionToken);
                     } catch(eIns) {
                         console.error('Lỗi lưu ACTIVE_SESSIONS:', eIns.message);
@@ -2186,6 +2344,11 @@ app.get('/api/verify-session', (req, res) => {
             // Token của client này không trùng khớp với Token của phiên mới nhất -> Bị chiếm quyền
             return res.json({ valid: false, reason: 'SESSION_DISPLACED' });
         }
+
+        // Cập nhật Last_activity (Heartbeat hoạt động)
+        try {
+            db.prepare("UPDATE ACTIVE_SESSIONS SET Last_activity = datetime('now', 'localtime') WHERE User_id = ? OR LOWER(Username) = ?").run(uidStr, uKey);
+        } catch(eAct) {}
 
         return res.json({ valid: true });
     } catch (err) {
@@ -2527,8 +2690,9 @@ app.put('/api/orders/:id/status', (req, res) => {
         `);
         const info = stmt.run(newStatus, numericId, idParam, codeWithPrefix);
 
-        // Nếu chuyển sang COMPLETED, SERVED hoặc CANCELED -> tự động giải phóng bàn
-        if (['COMPLETED', 'SERVED', 'CANCELED', 'CANCELLED'].includes(newStatus) && orderInfo && orderInfo.Table_number) {
+        // TUYỆT ĐỐI KHÔNG TỰ ĐỘNG DỌN BÀN khi đơn chuyển sang COMPLETED hoặc SERVED!
+        // Chỉ dọn bàn khi nhân viên bấm "Dọn bàn", hoặc đơn bị hủy (CANCELED/CANCELLED)
+        if (['CANCELED', 'CANCELLED'].includes(newStatus) && orderInfo && orderInfo.Table_number) {
             try {
                 const cleanTable = orderInfo.Table_number.replace(/^Bàn\s*/i, 'B').trim();
                 db.prepare(`
@@ -2548,7 +2712,11 @@ app.put('/api/orders/:id/status', (req, res) => {
                 Order_code: codeWithPrefix,
                 Status: newStatus
             });
-            io.emit('table_updated', { Table_name: orderInfo ? orderInfo.Table_number : null, Status: 'EMPTY' });
+            if (['CANCELED', 'CANCELLED'].includes(newStatus)) {
+                io.emit('table_updated', { Table_name: orderInfo ? orderInfo.Table_number : null, Status: 'EMPTY' });
+            } else {
+                io.emit('table_updated', { Table_name: orderInfo ? orderInfo.Table_number : null });
+            }
             io.emit('tables_list_changed');
         }
 

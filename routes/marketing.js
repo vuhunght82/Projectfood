@@ -168,6 +168,20 @@ router.get('/campaigns', (req, res) => {
             console.warn('Lỗi đồng bộ Usage_count từ ORDERS:', eSync.message);
         }
 
+        // Tự động tắt kích hoạt các chiến dịch đã quá ngày kết thúc (End_date)
+        try {
+            db.exec(`
+                UPDATE MARKETING_CAMPAIGNS
+                SET Is_active = 0
+                WHERE End_date IS NOT NULL 
+                  AND End_date != '' 
+                  AND date(End_date) < date('now', 'localtime')
+                  AND Is_active = 1;
+            `);
+        } catch (eExp) {
+            console.warn('Lỗi auto-expire campaigns:', eExp.message);
+        }
+
         const campaigns = db.prepare(`
             SELECT * FROM MARKETING_CAMPAIGNS 
             ORDER BY Is_active DESC, Campaign_id DESC
@@ -359,7 +373,11 @@ router.put('/campaigns/:id', (req, res) => {
 
         db.close();
         const io = req.app.get('io');
-        if (io) io.emit('banners_updated');
+        if (io) {
+            io.emit('banners_updated');
+            io.emit('campaigns_updated');
+            io.emit('vouchers_updated');
+        }
 
         res.json({ success: true, message: 'Đã cập nhật chiến dịch thành công!' });
     } catch (err) {
@@ -368,20 +386,31 @@ router.put('/campaigns/:id', (req, res) => {
     }
 });
 
-// 4. DELETE /api/marketing/campaigns/:id - Xóa chiến dịch
+// 4. DELETE /api/marketing/campaigns/:id - Xóa chiến dịch (Kèm xóa triệt để toàn bộ mã đã phát trong MEMBER_VOUCHERS)
 router.delete('/campaigns/:id', (req, res) => {
     try {
         const id = req.params.id;
         const db = getDb();
+        // Xóa mã ưu đãi cá nhân của chiến dịch này để tài khoản khách hàng cũng tự động mất mã
+        db.prepare("DELETE FROM MEMBER_VOUCHERS WHERE Campaign_id = ?").run(id);
+        // Xóa chiến dịch
         db.prepare("DELETE FROM MARKETING_CAMPAIGNS WHERE Campaign_id = ?").run(id);
         db.close();
-        res.json({ success: true, message: 'Đã xóa chiến dịch thành công!' });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('campaigns_updated');
+            io.emit('vouchers_updated');
+            io.emit('banners_updated');
+        }
+
+        res.json({ success: true, message: 'Đã xóa chiến dịch và toàn bộ mã ưu đãi liên quan thành công!' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// 5. POST /api/marketing/push-vouchers - Đẩy mã giảm giá cho thành viên
+// 5. POST /api/marketing/push-vouchers - Đẩy mã giảm giá cho thành viên (Hỗ trợ đa dạng đối tượng nhận mã)
 router.post('/push-vouchers', (req, res) => {
     try {
         const campaignId = req.body.Campaign_id || req.body.campaignId;
@@ -391,6 +420,8 @@ router.post('/push-vouchers', (req, res) => {
         const randomLimit = Number(req.body.Random_count || req.body.randomLimit || 20);
         const expiryDays = Number(req.body.Expiry_days || req.body.expiryDays || 30);
         const customExpiryDate = req.body.Custom_expiry_date || req.body.customExpiryDate || null;
+        const selectedMemberIds = req.body.selectedMemberIds || req.body.memberIds || [];
+        const customGroupId = req.body.customGroupId || req.body.groupId || null;
 
         if (!campaignId) {
             return res.status(400).json({ success: false, error: 'Thiếu mã chiến dịch!' });
@@ -404,7 +435,42 @@ router.post('/push-vouchers', (req, res) => {
         }
 
         let members = [];
-        if (targetType === 'TIER') {
+        if (targetType === 'SELECTED' || targetType === 'CUSTOM_MEMBERS') {
+            // Chỉ định danh sách hội viên cụ thể được chọn
+            if (Array.isArray(selectedMemberIds) && selectedMemberIds.length > 0) {
+                const placeholders = selectedMemberIds.map(() => '?').join(',');
+                members = db.prepare(`SELECT Member_id, Full_name, Phone, Email, Current_tier, Created_at FROM MEMBERS WHERE Member_id IN (${placeholders}) AND Is_active = 1`).all(...selectedMemberIds);
+            }
+        } else if (targetType === 'BIRTHDAY' || targetType === 'BIRTHDAY_MONTH') {
+            // Hội viên sinh nhật trong tháng hiện tại
+            members = db.prepare(`
+                SELECT Member_id, Full_name, Phone, Email, Current_tier, Created_at 
+                FROM MEMBERS 
+                WHERE Is_active = 1 AND (
+                    strftime('%m', Birthday) = strftime('%m', 'now', 'localtime') 
+                    OR substr(Birthday, 6, 2) = strftime('%m', 'now', 'localtime')
+                )
+            `).all();
+        } else if (targetType === 'HAS_EMAIL') {
+            // Hội viên có email
+            members = db.prepare(`
+                SELECT Member_id, Full_name, Phone, Email, Current_tier, Created_at 
+                FROM MEMBERS 
+                WHERE Is_active = 1 AND Email IS NOT NULL AND TRIM(Email) != ''
+            `).all();
+        } else if (targetType === 'CUSTOM_GROUP' && customGroupId) {
+            // Nhóm đối tượng tùy chỉnh
+            const grp = db.prepare("SELECT Member_ids FROM MARKETING_TARGET_GROUPS WHERE Group_id = ?").get(customGroupId);
+            if (grp && grp.Member_ids) {
+                try {
+                    const ids = JSON.parse(grp.Member_ids);
+                    if (Array.isArray(ids) && ids.length > 0) {
+                        const placeholders = ids.map(() => '?').join(',');
+                        members = db.prepare(`SELECT Member_id, Full_name, Phone, Email, Current_tier, Created_at FROM MEMBERS WHERE Member_id IN (${placeholders}) AND Is_active = 1`).all(...ids);
+                    }
+                } catch(eG) {}
+            }
+        } else if (targetType === 'TIER') {
             if (targetTier === 'ALL') {
                 members = db.prepare("SELECT Member_id, Full_name, Phone, Email, Current_tier, Created_at FROM MEMBERS WHERE Is_active = 1").all();
             } else {
@@ -703,23 +769,64 @@ router.post('/verify-voucher', (req, res) => {
         const db = getDb();
         const subtotalNum = Number(Subtotal || 0);
 
-        // 1. Kiểm tra voucher riêng của thành viên
-        let voucher = null;
-        if (Member_id) {
-            voucher = db.prepare(`
-                SELECT v.*, c.Campaign_type, c.Min_membership_months, c.Target_tier, c.Min_bill_amount
-                FROM MEMBER_VOUCHERS v
-                LEFT JOIN MARKETING_CAMPAIGNS c ON v.Campaign_id = c.Campaign_id
-                WHERE v.Voucher_code = ? AND v.Member_id = ? AND v.Status = 'UNUSED'
-            `).get(cleanCode, Member_id);
-        }
+        // 1. Kiểm tra nếu mã này là voucher cá nhân trong MEMBER_VOUCHERS
+        const anyMemberVoucher = db.prepare(`
+            SELECT v.*, c.Campaign_type, c.Min_membership_months, c.Target_tier, c.Min_bill_amount
+            FROM MEMBER_VOUCHERS v
+            LEFT JOIN MARKETING_CAMPAIGNS c ON v.Campaign_id = c.Campaign_id
+            WHERE UPPER(v.Voucher_code) = ?
+        `).get(cleanCode);
 
-        // 2. Nếu không tìm thấy voucher cá nhân, tìm trong bảng chiến dịch chung
-        if (!voucher) {
+        let voucher = null;
+        if (anyMemberVoucher) {
+            // Đây là mã định danh riêng cho 1 hội viên
+            if (Member_id && Number(anyMemberVoucher.Member_id) !== Number(Member_id)) {
+                db.close();
+                return res.status(400).json({
+                    success: false,
+                    valid: false,
+                    reason: `Mã ưu đãi này được phát riêng cho hội viên khác, bạn không thể sử dụng mã này!`
+                });
+            }
+            if (!Member_id) {
+                db.close();
+                return res.status(400).json({
+                    success: false,
+                    valid: false,
+                    reason: `Mã ưu đãi này dành riêng cho hội viên. Vui lòng chọn hoặc đăng nhập hội viên trước khi áp dụng!`
+                });
+            }
+            if (anyMemberVoucher.Status === 'USED') {
+                db.close();
+                return res.status(400).json({
+                    success: false,
+                    valid: false,
+                    reason: `Mã ưu đãi [${cleanCode}] đã được sử dụng! Mỗi mã chỉ được áp dụng 1 lần duy nhất.`
+                });
+            }
+            if (anyMemberVoucher.Status === 'CANCELLED') {
+                db.close();
+                return res.status(400).json({
+                    success: false,
+                    valid: false,
+                    reason: `Mã ưu đãi [${cleanCode}] đã bị quản trị viên hủy!`
+                });
+            }
+            if (anyMemberVoucher.Status === 'EXPIRED' || (anyMemberVoucher.Expiry_date && new Date(anyMemberVoucher.Expiry_date) < new Date())) {
+                db.close();
+                return res.status(400).json({
+                    success: false,
+                    valid: false,
+                    reason: `Mã ưu đãi [${cleanCode}] đã hết hạn sử dụng!`
+                });
+            }
+            voucher = anyMemberVoucher;
+        } else {
+            // 2. Nếu không phải voucher cá nhân, tìm trong bảng chiến dịch chung
             const camp = db.prepare(`
                 SELECT *, 0 as Voucher_id, Code as Voucher_code, Campaign_name as Title
                 FROM MARKETING_CAMPAIGNS 
-                WHERE Code = ? AND Is_active = 1
+                WHERE UPPER(Code) = ? AND Is_active = 1
             `).get(cleanCode);
 
             if (camp) {
@@ -737,6 +844,24 @@ router.post('/verify-voucher', (req, res) => {
                     Usage_limit: camp.Usage_limit,
                     Usage_count: camp.Usage_count
                 };
+            }
+        }
+
+        // 3. Giới hạn nghiêm ngặt: Mỗi khách hàng chỉ được dùng mã ưu đãi này 1 lần duy nhất
+        if (Member_id) {
+            const usedCheck = db.prepare(`
+                SELECT COUNT(*) as cnt FROM ORDERS 
+                WHERE Member_id = ? AND UPPER(Voucher_code) = ? 
+                  AND (Status IS NULL OR Status != 'CANCELLED')
+            `).get(Member_id, cleanCode)?.cnt || 0;
+
+            if (usedCheck >= 1) {
+                db.close();
+                return res.status(400).json({
+                    success: false,
+                    valid: false,
+                    reason: `Bạn đã sử dụng mã ưu đãi [${cleanCode}] trong đơn hàng trước đó (Mỗi mã chỉ được áp dụng 1 lần duy nhất cho 1 khách hàng)!`
+                });
             }
         }
 
@@ -2129,6 +2254,230 @@ router.post('/schedules/:id/run-now', async (req, res) => {
         res.json(result);
     } catch (err) {
         console.error('Lỗi run-now:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 8. CRUD QUẢN LÝ NHÓM ĐỐI TƯỢNG NHẬN MÃ (TARGET GROUPS)
+// ==========================================
+router.get('/target-groups', (req, res) => {
+    try {
+        const db = getDb();
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS MARKETING_TARGET_GROUPS (
+                Group_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                Description TEXT,
+                Member_ids TEXT,
+                Created_at DATETIME DEFAULT (datetime('now', 'localtime'))
+            );
+        `);
+        const groups = db.prepare("SELECT * FROM MARKETING_TARGET_GROUPS ORDER BY Group_id DESC").all();
+        db.close();
+        res.json({ success: true, groups });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.post('/target-groups', (req, res) => {
+    try {
+        const { name, description = '', memberIds = [] } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, error: 'Vui lòng nhập tên nhóm đối tượng!' });
+        }
+        const db = getDb();
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS MARKETING_TARGET_GROUPS (
+                Group_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                Description TEXT,
+                Member_ids TEXT,
+                Created_at DATETIME DEFAULT (datetime('now', 'localtime'))
+            );
+        `);
+        const jsonIds = JSON.stringify(Array.isArray(memberIds) ? memberIds : []);
+        const info = db.prepare("INSERT INTO MARKETING_TARGET_GROUPS (Name, Description, Member_ids) VALUES (?, ?, ?)").run(name.trim(), description.trim(), jsonIds);
+        db.close();
+
+        const io = req.app.get('io');
+        if (io) io.emit('marketing_target_groups_updated');
+
+        res.json({ success: true, groupId: info.lastInsertRowid, message: 'Đã tạo nhóm đối tượng thành công!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.put('/target-groups/:id', (req, res) => {
+    try {
+        const id = req.params.id;
+        const { name, description = '', memberIds = [] } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, error: 'Vui lòng nhập tên nhóm đối tượng!' });
+        }
+        const db = getDb();
+        const jsonIds = JSON.stringify(Array.isArray(memberIds) ? memberIds : []);
+        db.prepare("UPDATE MARKETING_TARGET_GROUPS SET Name = ?, Description = ?, Member_ids = ? WHERE Group_id = ?").run(name.trim(), description.trim(), jsonIds, id);
+        db.close();
+
+        const io = req.app.get('io');
+        if (io) io.emit('marketing_target_groups_updated');
+
+        res.json({ success: true, message: 'Đã cập nhật nhóm đối tượng thành công!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.delete('/target-groups/:id', (req, res) => {
+    try {
+        const id = req.params.id;
+        const db = getDb();
+        db.prepare("DELETE FROM MARKETING_TARGET_GROUPS WHERE Group_id = ?").run(id);
+        db.close();
+
+        const io = req.app.get('io');
+        if (io) io.emit('marketing_target_groups_updated');
+
+        res.json({ success: true, message: 'Đã xóa nhóm đối tượng thành công!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 9. CRUD QUẢN LÝ CÁC LOẠI CHIẾN DỊCH (CAMPAIGN TYPES)
+// ==========================================
+router.get('/campaign-types', (req, res) => {
+    try {
+        const db = getDb();
+        const defaultTypes = [
+            { code: 'BILL_AMOUNT', name: '💰 Giảm theo hóa đơn tối thiểu', desc: 'Áp dụng khi tổng hóa đơn đạt mức nhất định' },
+            { code: 'COMBO', name: '🍱 Giảm giá theo Combo', desc: 'Áp dụng khi gọi combo món ăn' },
+            { code: 'DAY_OF_WEEK', name: '📅 Giảm theo thứ ngày (Mùng 1/Rằm/Thứ 2..)', desc: 'Áp dụng định kỳ vào các ngày chay hoặc các thứ trong tuần' },
+            { code: 'EVENT', name: '🎉 Theo sự kiện / Lễ hội', desc: 'Áp dụng vào các dịp lễ tết hoặc chương trình đặc biệt' },
+            { code: 'MEMBER_TENURE', name: '⭐ Ưu đãi theo thâm niên thẻ (>3/6/12 tháng)', desc: 'Dành riêng cho khách hàng gắn bó lâu dài' },
+            { code: 'BIRTHDAY', name: '🎂 Ưu đãi sinh nhật thành viên', desc: 'Tự động gửi và áp dụng vào tháng sinh nhật' },
+            { code: 'HAPPY_HOUR', name: '⏰ Giờ vàng giảm giá', desc: 'Áp dụng cho khung giờ ăn trưa hoặc tối cụ thể' },
+            { code: 'FREE_ITEM', name: '🎁 Tặng món / Quà tri ân', desc: 'Tặng kèm món hoặc nước uống' }
+        ];
+
+        let customTypes = [];
+        try {
+            const row = db.prepare("SELECT Value FROM SYSTEM_CONFIG WHERE Key = 'marketing_campaign_types'").get();
+            if (row && row.Value) {
+                customTypes = JSON.parse(row.Value);
+            }
+        } catch(e) {}
+        db.close();
+
+        // Gộp default và custom/edited
+        const defaultMap = new Map();
+        defaultTypes.forEach(t => {
+            defaultMap.set(t.code, { ...t, label: t.name, isCustom: false, isEdited: false });
+        });
+
+        if (Array.isArray(customTypes)) {
+            customTypes.forEach(ct => {
+                const displayName = ct.name || ct.label || ct.code;
+                const existing = defaultMap.get(ct.code);
+                if (existing) {
+                    defaultMap.set(ct.code, {
+                        ...existing,
+                        name: displayName,
+                        label: displayName,
+                        desc: ct.desc !== undefined ? ct.desc : existing.desc,
+                        isEdited: true
+                    });
+                } else {
+                    defaultMap.set(ct.code, {
+                        code: ct.code,
+                        name: displayName,
+                        label: displayName,
+                        desc: ct.desc || '',
+                        isCustom: true,
+                        isEdited: false
+                    });
+                }
+            });
+        }
+
+        const merged = Array.from(defaultMap.values());
+        res.json({ success: true, types: merged });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.post('/campaign-types', (req, res) => {
+    try {
+        const { code, name, label, desc = '', originalCode } = req.body;
+        const displayName = String(name || label || '').trim();
+        if (!code || !displayName) {
+            return res.status(400).json({ success: false, error: 'Vui lòng cung cấp mã và tên loại chiến dịch!' });
+        }
+        const cleanCode = String(code).toUpperCase().trim().replace(/[^A-Z0-9_]/g, '_');
+        const db = getDb();
+
+        let list = [];
+        try {
+            const row = db.prepare("SELECT Value FROM SYSTEM_CONFIG WHERE Key = 'marketing_campaign_types'").get();
+            if (row && row.Value) list = JSON.parse(row.Value);
+        } catch(e) {}
+
+        // Nếu có originalCode và đổi sang mã mới, xóa originalCode cũ
+        if (originalCode && originalCode.toUpperCase().trim() !== cleanCode) {
+            list = list.filter(x => x.code !== originalCode.toUpperCase().trim());
+        }
+
+        const idx = list.findIndex(x => x.code === cleanCode);
+        const itemData = { 
+            code: cleanCode, 
+            name: displayName, 
+            label: displayName, 
+            desc: String(desc || '').trim() 
+        };
+
+        if (idx >= 0) {
+            list[idx] = itemData;
+        } else {
+            list.push(itemData);
+        }
+
+        db.prepare("INSERT INTO SYSTEM_CONFIG (Key, Value) VALUES ('marketing_campaign_types', ?) ON CONFLICT(Key) DO UPDATE SET Value = excluded.Value").run(JSON.stringify(list));
+        db.close();
+
+        const io = req.app.get('io');
+        if (io) io.emit('campaign_types_updated');
+
+        res.json({ success: true, message: `Đã lưu loại chiến dịch [${displayName}] thành công!`, item: itemData });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.delete('/campaign-types/:code', (req, res) => {
+    try {
+        const code = req.params.code?.toUpperCase();
+        const db = getDb();
+
+        let list = [];
+        try {
+            const row = db.prepare("SELECT Value FROM SYSTEM_CONFIG WHERE Key = 'marketing_campaign_types'").get();
+            if (row && row.Value) list = JSON.parse(row.Value);
+        } catch(e) {}
+
+        const filtered = list.filter(x => x.code !== code);
+        db.prepare("INSERT INTO SYSTEM_CONFIG (Key, Value) VALUES ('marketing_campaign_types', ?) ON CONFLICT(Key) DO UPDATE SET Value = excluded.Value").run(JSON.stringify(filtered));
+        db.close();
+
+        const io = req.app.get('io');
+        if (io) io.emit('campaign_types_updated');
+
+        res.json({ success: true, message: 'Đã xóa / khôi phục loại chiến dịch thành công!' });
+    } catch(err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
