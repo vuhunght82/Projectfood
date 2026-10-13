@@ -32,22 +32,24 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2.0.0" --locked
 
-      # Tự động khởi tạo iOS trên máy Mac của GitHub Actions nếu chưa có
-      - name: Initialize iOS if missing
+      # Tự khởi tạo Tauri dự án nếu repo chưa có src-tauri
+      - name: Initialize Tauri & iOS
         run: |
+          if [ ! -d "src-tauri" ]; then
+            cargo tauri init --app-name "ProjectFood" --window-title "Project Food" --frontend-dist ".." --dev-url ".." --ci
+          fi
           if [ ! -d "src-tauri/gen/apple" ]; then
             cargo tauri ios init
           fi
 
+      # Build ứng dụng iOS bằng Tauri CLI
       - name: Build iOS project
         run: |
-          cargo tauri ios build --no-watch
+          cargo tauri ios build --target aarch64-apple-ios-sim
 
       - name: Upload iOS Xcode Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build-output
-          path: |
-            src-tauri/gen/apple/build/**/*.ipa
-            src-tauri/gen/apple/build/**/*.app
+          name: ios-app-output
+          path: src-tauri/gen/apple/build/**/*.app
           if-no-files-found: warn
