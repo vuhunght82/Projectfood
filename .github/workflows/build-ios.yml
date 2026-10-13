@@ -2,162 +2,134 @@ name: Build iOS (Tauri)
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-ios:
     runs-on: macos-14
+    timeout-minutes: 90
+
+    env:
+      CI: true
+      APPLE_DEVELOPMENT_TEAM: "0000000000"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Ép runner macos-14 sử dụng Xcode 16 để tương thích với format 77 của Tauri v2
       - name: Select Xcode 16
+        shell: bash
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer || \
-          sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer || \
-          sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+          set -euxo pipefail
+
+          XCODE_PATH=""
+          for p in \
+            /Applications/Xcode_16.1.app/Contents/Developer \
+            /Applications/Xcode_16.0.app/Contents/Developer \
+            /Applications/Xcode_16.app/Contents/Developer; do
+            if [ -d "$p" ]; then
+              XCODE_PATH="$p"
+              break
+            fi
+          done
+
+          if [ -z "$XCODE_PATH" ]; then
+            echo "Xcode 16 not found on runner" >&2
+            ls /Applications || true
+            exit 1
+          fi
+
+          sudo xcode-select -switch "$XCODE_PATH"
+          xcodebuild -version
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable
           targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
-      - name: Install dependencies & Tauri CLI
+      - name: Install Homebrew + iOS build tools
+        shell: bash
         run: |
+          set -euxo pipefail
+
+          if ! command -v brew >/dev/null 2>&1; then
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          fi
+
+          if [ -x /opt/homebrew/bin/brew ]; then
+            eval "$(/opt/homebrew/bin/brew shell-env)"
+          elif [ -x /usr/local/bin/brew ]; then
+            eval "$(/usr/local/bin/brew shell-env)"
+          fi
+
+          brew install --quiet xcodegen cocoapods jq
+
+      - name: Install app dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
           npm ci
           npm install --save-dev @tauri-apps/cli@latest
 
-      # Cài đặt công cụ iOS bắt buộc (xcodegen & cocoapods) chuẩn ARM64
-      - name: Install iOS build tools
+      - name: Validate Tauri project exists
+        shell: bash
         run: |
-          arch -arm64 brew install xcodegen cocoapods jq
+          set -euxo pipefail
 
-      # Khởi tạo toàn bộ cấu hình Tauri chuẩn và triệt tiêu beforeBuildCommand
-      - name: Setup Tauri Project & Config
-        env:
-          APPLE_DEVELOPMENT_TEAM: "0000000000"
-        run: |
-          mkdir -p src-tauri
+          test -f package.json
+          test -f src-tauri/Cargo.toml
+          test -f src-tauri/tauri.conf.json
 
-          # Tạo file tauri.conf.json chuẩn chỉnh cho web remote
-          cat << 'EOF' > src-tauri/tauri.conf.json
-          {
-            "$schema": "https://schema.tauri.app/config/2",
-            "productName": "ProjectFood",
-            "version": "1.0.0",
-            "identifier": "com.projectfood.restaurant",
-            "build": {
-              "frontendDist": "http://221.132.21.152:3000",
-              "devUrl": "http://221.132.21.152:3000"
-            },
-            "app": {
-              "withGlobalTauri": true,
-              "windows": [
-                {
-                  "title": "Project Food",
-                  "width": 800,
-                  "height": 600
-                }
-              ],
-              "security": {
-                "csp": null
-              }
-            },
-            "bundle": {
-              "active": true,
-              "targets": "all"
-            }
-          }
-          EOF
-
-          # Khởi tạo Cargo.toml và main.rs nếu chưa có
-          if [ ! -f "src-tauri/Cargo.toml" ]; then
-            cat << 'EOF' > src-tauri/Cargo.toml
-          [package]
-          name = "project-food"
-          version = "0.1.0"
-          description = "Project Food App"
-          authors = ["you"]
-          edition = "2021"
-
-          [lib]
-          name = "project_food_lib"
-          crate-type = ["staticlib", "cdylib", "rlib"]
-
-          [build-dependencies]
-          tauri-build = { version = "2", features = [] }
-
-          [dependencies]
-          tauri = { version = "2", features = [] }
-          serde = { version = "1", features = ["derive"] }
-          serde_json = "1"
-          EOF
-
-            cat << 'EOF' > src-tauri/build.rs
-          fn main() {
-              tauri_build::build()
-          }
-          EOF
-
-            mkdir -p src-tauri/src
-            cat << 'EOF' > src-tauri/src/lib.rs
-          #[cfg_attr(mobile, tauri::mobile_entry_point)]
-          pub fn run() {
-              tauri::Builder::default()
-                  .run(tauri::generate_context!())
-                  .expect("error while running tauri application");
-          }
-          EOF
-
-            cat << 'EOF' > src-tauri/src/main.rs
-          #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-          fn main() {
-              project_food_lib::run();
-          }
-          EOF
-          fi
-
-          # Khởi tạo Xcode project cho iOS
-          if [ ! -d "src-tauri/gen/apple" ]; then
-            npx tauri ios init
-          fi
-
-      # Cache các thư viện Rust để tăng tốc build
-      - name: Rust Cache
+      - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      # Cấu hình Info.plist cho phép HTTP không mã hóa (ATS)
-      - name: Allow HTTP in iOS Info.plist
+      - name: Initialize iOS project
+        shell: bash
         run: |
+          set -euxo pipefail
+          npx tauri ios init --ci || true
+
+      - name: Allow HTTP in iOS Info.plist
+        shell: bash
+        run: |
+          set -euxo pipefail
+          shopt -s nullglob
+
           for plist in src-tauri/gen/apple/*/Info.plist; do
-            if [ -f "$plist" ]; then
-              /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$plist" 2>/dev/null || true
-              /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$plist" 2>/dev/null || \
-              /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$plist"
-            fi
+            echo "Patching $plist"
+
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$plist" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$plist" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$plist" 2>/dev/null || true
+
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSExceptionDomains dict" "$plist" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSExceptionDomains:221.132.21.152 dict" "$plist" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSExceptionDomains:221.132.21.152:NSExceptionAllowsInsecureHTTPLoads bool true" "$plist" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSExceptionDomains:221.132.21.152:NSExceptionAllowsInsecureHTTPLoads true" "$plist" 2>/dev/null || true
           done
 
-      # Build ứng dụng cho iOS Simulator
-      - name: Build iOS project
+      - name: Build iOS simulator app
+        shell: bash
         run: |
-          npx tauri ios build --target aarch64-sim
+          set -euxo pipefail
+          npx tauri ios build --target aarch64-apple-ios-sim
 
-      # Lưu file build (.app) vào GitHub Artifacts
-      - name: Upload iOS Xcode Artifacts
+      - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-output
