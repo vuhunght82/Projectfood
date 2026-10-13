@@ -1,0 +1,53 @@
+name: Build iOS (Tauri)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0.0" --locked
+
+      # Tự động khởi tạo iOS trên máy Mac của GitHub Actions nếu chưa có
+      - name: Initialize iOS if missing
+        run: |
+          if [ ! -d "src-tauri/gen/apple" ]; then
+            cargo tauri ios init
+          fi
+
+      - name: Build iOS project
+        run: |
+          cargo tauri ios build --no-watch
+
+      - name: Upload iOS Xcode Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-output
+          path: |
+            src-tauri/gen/apple/build/**/*.ipa
+            src-tauri/gen/apple/build/**/*.app
+          if-no-files-found: warn
