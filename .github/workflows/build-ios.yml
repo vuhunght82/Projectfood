@@ -29,20 +29,38 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Cài tauri-cli dạng binary pre-built (chỉ mất vài giây)
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2.0.0" --locked
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall tauri-cli --version "^2.0.0" --no-confirm
 
-      # Tự khởi tạo Tauri dự án nếu repo chưa có src-tauri
+      # Khởi tạo dự án Tauri trỏ trực tiếp về URL từ xa
       - name: Initialize Tauri & iOS
         run: |
           if [ ! -d "src-tauri" ]; then
-            cargo tauri init --app-name "ProjectFood" --window-title "Project Food" --frontend-dist ".." --dev-url ".." --ci
+            cargo tauri init \
+              --app-name "ProjectFood" \
+              --window-title "Project Food" \
+              --frontend-dist "http://221.132.21.152:3000" \
+              --dev-url "http://221.132.21.152:3000" \
+              --ci
           fi
           if [ ! -d "src-tauri/gen/apple" ]; then
             cargo tauri ios init
           fi
 
-      # Build ứng dụng iOS bằng Tauri CLI
+      # Cho phép kết nối HTTP không bảo mật trên iOS (App Transport Security)
+      - name: Allow HTTP in iOS Info.plist
+        run: |
+          PLIST_PATH="src-tauri/gen/apple/ProjectFood_iOS/Info.plist"
+          if [ -f "$PLIST_PATH" ]; then
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PLIST_PATH" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$PLIST_PATH" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$PLIST_PATH"
+          fi
+
+      # Build ứng dụng iOS
       - name: Build iOS project
         run: |
           cargo tauri ios build --target aarch64-apple-ios-sim
