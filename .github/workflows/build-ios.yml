@@ -31,7 +31,7 @@ jobs:
           npm ci
           npm install --save-dev @tauri-apps/cli@next
 
-      # Cài đặt xcodegen và cocoapods (chuẩn native ARM64 của macOS)
+      # Cài đặt công cụ bắt buộc của iOS
       - name: Install iOS build tools (xcodegen & cocoapods)
         run: |
           arch -arm64 brew install xcodegen cocoapods
@@ -53,13 +53,13 @@ jobs:
             npx tauri ios init
           fi
 
-      # Kích hoạt Cache Rust (Đặt sau khi đã có thư mục src-tauri để nhận workspace)
+      # Cache các thư viện Rust sau khi đã tạo src-tauri
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      # Cấu hình Info.plist cho phép kết nối HTTP không bảo mật
+      # Cấu hình Info.plist cho phép HTTP không mã hóa
       - name: Allow HTTP in iOS Info.plist
         run: |
           for plist in src-tauri/gen/apple/*/Info.plist; do
@@ -70,12 +70,12 @@ jobs:
             fi
           done
 
-      # Build ứng dụng cho iOS Simulator
+      # Build ứng dụng iOS Simulator (dùng đúng giá trị aarch64-sim của Tauri CLI)
       - name: Build iOS project
         run: |
-          npx tauri ios build --target aarch64-apple-ios-sim
+          npx tauri ios build --target aarch64-sim
 
-      # Tải file .app lên Artifacts sau khi build thành công
+      # Lưu file build vào Artifacts
       - name: Upload iOS Xcode Artifacts
         uses: actions/upload-artifact@v4
         with:
