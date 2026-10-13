@@ -36,25 +36,93 @@ jobs:
         run: |
           arch -arm64 brew install xcodegen cocoapods jq
 
-      # Khởi tạo Tauri project và cập nhật bundle identifier hợp lệ
-      - name: Initialize Tauri & iOS
+      # Khởi tạo toàn bộ cấu hình Tauri chuẩn và triệt tiêu beforeBuildCommand
+      - name: Setup Tauri Project & Config
         env:
           APPLE_DEVELOPMENT_TEAM: "0000000000"
         run: |
-          if [ ! -d "src-tauri" ]; then
-            npx tauri init \
-              --app-name "ProjectFood" \
-              --window-title "Project Food" \
-              --frontend-dist "http://221.132.21.152:3000" \
-              --dev-url "http://221.132.21.152:3000" \
-              --ci
+          mkdir -p src-tauri
+
+          # Tạo file tauri.conf.json chuẩn chỉnh không có beforeBuildCommand
+          cat << 'EOF' > src-tauri/tauri.conf.json
+          {
+            "$schema": "https://schema.tauri.app/config/2",
+            "productName": "ProjectFood",
+            "version": "1.0.0",
+            "identifier": "com.projectfood.restaurant",
+            "build": {
+              "frontendDist": "http://221.132.21.152:3000",
+              "devUrl": "http://221.132.21.152:3000"
+            },
+            "app": {
+              "withGlobalTauri": true,
+              "windows": [
+                {
+                  "title": "Project Food",
+                  "width": 800,
+                  "height": 600
+                }
+              ],
+              "security": {
+                "csp": null
+              }
+            },
+            "bundle": {
+              "active": true,
+              "targets": "all"
+            }
+          }
+          EOF
+
+          # Khởi tạo Cargo.toml và main.rs nếu chưa có
+          if [ ! -f "src-tauri/Cargo.toml" ]; then
+            cat << 'EOF' > src-tauri/Cargo.toml
+          [package]
+          name = "project-food"
+          version = "0.1.0"
+          description = "Project Food App"
+          authors = ["you"]
+          edition = "2021"
+
+          [lib]
+          name = "project_food_lib"
+          crate-type = ["staticlib", "cdylib", "rlib"]
+
+          [build-dependencies]
+          tauri-build = { version = "2", features = [] }
+
+          [dependencies]
+          tauri = { version = "2", features = [] }
+          serde = { version = "1", features = ["derive"] }
+          serde_json = "1"
+          EOF
+
+            cat << 'EOF' > src-tauri/build.rs
+          fn main() {
+              tauri_build::build()
+          }
+          EOF
+
+            mkdir -p src-tauri/src
+            cat << 'EOF' > src-tauri/src/lib.rs
+          #[cfg_attr(mobile, tauri::mobile_entry_point)]
+          pub fn run() {
+              tauri::Builder::default()
+                  .run(tauri::generate_context!())
+                  .expect("error while running tauri application");
+          }
+          EOF
+
+            cat << 'EOF' > src-tauri/src/main.rs
+          #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+          fn main() {
+              project_food_lib::run();
+          }
+          EOF
           fi
 
-          # Đổi bundle identifier từ com.tauri.dev sang com.projectfood.app
-          if [ -f "src-tauri/tauri.conf.json" ]; then
-            jq '.identifier = "com.projectfood.app"' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
-          fi
-
+          # Khởi tạo Xcode project cho iOS
           if [ ! -d "src-tauri/gen/apple" ]; then
             npx tauri ios init
           fi
@@ -65,7 +133,7 @@ jobs:
         with:
           workspaces: src-tauri
 
-      # Cho phép kết nối HTTP trên iOS
+      # Cấu hình Info.plist cho phép HTTP không mã hóa
       - name: Allow HTTP in iOS Info.plist
         run: |
           for plist in src-tauri/gen/apple/*/Info.plist; do
