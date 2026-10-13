@@ -26,27 +26,23 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies & Tauri CLI
+        run: |
+          npm ci
+          npm install --save-dev @tauri-apps/cli@next
 
-      # Cài đặt trước xcodegen và cocoapods để Tauri không tự gọi brew bị lỗi Rosetta
+      # Cài đặt xcodegen và cocoapods (chuẩn native ARM64 của macOS)
       - name: Install iOS build tools (xcodegen & cocoapods)
         run: |
           arch -arm64 brew install xcodegen cocoapods
 
-      # Cài tauri-cli dạng binary
-      - name: Install Tauri CLI
-        run: |
-          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-          cargo binstall tauri-cli --version "^2.0.0" --no-confirm
-
-      # Khởi tạo Tauri project trỏ về IP máy chủ của bạn
+      # Khởi tạo Tauri project trỏ về IP máy chủ
       - name: Initialize Tauri & iOS
         env:
           APPLE_DEVELOPMENT_TEAM: "0000000000"
         run: |
           if [ ! -d "src-tauri" ]; then
-            cargo tauri init \
+            npx tauri init \
               --app-name "ProjectFood" \
               --window-title "Project Food" \
               --frontend-dist "http://221.132.21.152:3000" \
@@ -54,10 +50,16 @@ jobs:
               --ci
           fi
           if [ ! -d "src-tauri/gen/apple" ]; then
-            cargo tauri ios init
+            npx tauri ios init
           fi
 
-      # Cho phép kết nối HTTP qua mạng không bảo mật trên iOS
+      # Kích hoạt Cache Rust (Đặt sau khi đã có thư mục src-tauri để nhận workspace)
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Cấu hình Info.plist cho phép kết nối HTTP không bảo mật
       - name: Allow HTTP in iOS Info.plist
         run: |
           for plist in src-tauri/gen/apple/*/Info.plist; do
@@ -68,11 +70,12 @@ jobs:
             fi
           done
 
-      # Build ứng dụng iOS
+      # Build ứng dụng cho iOS Simulator
       - name: Build iOS project
         run: |
-          cargo tauri ios build --target aarch64-apple-ios-sim
+          npx tauri ios build --target aarch64-apple-ios-sim
 
+      # Tải file .app lên Artifacts sau khi build thành công
       - name: Upload iOS Xcode Artifacts
         uses: actions/upload-artifact@v4
         with:
