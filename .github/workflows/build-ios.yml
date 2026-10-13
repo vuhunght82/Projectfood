@@ -31,12 +31,12 @@ jobs:
           npm ci
           npm install --save-dev @tauri-apps/cli@next
 
-      # Cài đặt công cụ bắt buộc của iOS
+      # Cài đặt công cụ iOS bắt buộc
       - name: Install iOS build tools (xcodegen & cocoapods)
         run: |
-          arch -arm64 brew install xcodegen cocoapods
+          arch -arm64 brew install xcodegen cocoapods jq
 
-      # Khởi tạo Tauri project trỏ về IP máy chủ
+      # Khởi tạo Tauri project và cập nhật bundle identifier hợp lệ
       - name: Initialize Tauri & iOS
         env:
           APPLE_DEVELOPMENT_TEAM: "0000000000"
@@ -49,17 +49,23 @@ jobs:
               --dev-url "http://221.132.21.152:3000" \
               --ci
           fi
+
+          # Đổi bundle identifier từ com.tauri.dev sang com.projectfood.app
+          if [ -f "src-tauri/tauri.conf.json" ]; then
+            jq '.identifier = "com.projectfood.app"' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          fi
+
           if [ ! -d "src-tauri/gen/apple" ]; then
             npx tauri ios init
           fi
 
-      # Cache các thư viện Rust sau khi đã tạo src-tauri
+      # Cache các thư viện Rust
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      # Cấu hình Info.plist cho phép HTTP không mã hóa
+      # Cho phép kết nối HTTP trên iOS
       - name: Allow HTTP in iOS Info.plist
         run: |
           for plist in src-tauri/gen/apple/*/Info.plist; do
@@ -70,7 +76,7 @@ jobs:
             fi
           done
 
-      # Build ứng dụng iOS Simulator (dùng đúng giá trị aarch64-sim của Tauri CLI)
+      # Build ứng dụng cho iOS Simulator
       - name: Build iOS project
         run: |
           npx tauri ios build --target aarch64-sim
