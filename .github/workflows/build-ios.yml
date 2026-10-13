@@ -15,6 +15,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Ép runner macos-14 sử dụng Xcode 16 để tương thích với format 77 của Tauri v2
+      - name: Select Xcode 16
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer || \
+          sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer || \
+          sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -29,10 +36,10 @@ jobs:
       - name: Install dependencies & Tauri CLI
         run: |
           npm ci
-          npm install --save-dev @tauri-apps/cli@next
+          npm install --save-dev @tauri-apps/cli@latest
 
-      # Cài đặt công cụ iOS bắt buộc
-      - name: Install iOS build tools (xcodegen & cocoapods)
+      # Cài đặt công cụ iOS bắt buộc (xcodegen & cocoapods) chuẩn ARM64
+      - name: Install iOS build tools
         run: |
           arch -arm64 brew install xcodegen cocoapods jq
 
@@ -43,7 +50,7 @@ jobs:
         run: |
           mkdir -p src-tauri
 
-          # Tạo file tauri.conf.json chuẩn chỉnh không có beforeBuildCommand
+          # Tạo file tauri.conf.json chuẩn chỉnh cho web remote
           cat << 'EOF' > src-tauri/tauri.conf.json
           {
             "$schema": "https://schema.tauri.app/config/2",
@@ -127,13 +134,13 @@ jobs:
             npx tauri ios init
           fi
 
-      # Cache các thư viện Rust
+      # Cache các thư viện Rust để tăng tốc build
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      # Cấu hình Info.plist cho phép HTTP không mã hóa
+      # Cấu hình Info.plist cho phép HTTP không mã hóa (ATS)
       - name: Allow HTTP in iOS Info.plist
         run: |
           for plist in src-tauri/gen/apple/*/Info.plist; do
@@ -149,7 +156,7 @@ jobs:
         run: |
           npx tauri ios build --target aarch64-sim
 
-      # Lưu file build vào Artifacts
+      # Lưu file build (.app) vào GitHub Artifacts
       - name: Upload iOS Xcode Artifacts
         uses: actions/upload-artifact@v4
         with:
