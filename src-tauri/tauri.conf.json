@@ -5,7 +5,7 @@
   "identifier": "com.hoasen.pos",
   "build": {
     "beforeDevCommand": "",
-    "devUrl": "http://221.132.21.152:3000",
+    "devUrl": "https://hoangphucglass.cloud",
     "beforeBuildCommand": "",
     "frontendDist": "../public"
   },
@@ -13,16 +13,25 @@
     "windows": [
       {
         "title": "Nhà Hàng Chay Hoa Sen - POS & Vận Hành",
-        "url": "http://221.132.21.152:3000",
+        "url": "https://hoangphucglass.cloud",
         "width": 1280,
         "height": 800,
         "resizable": true,
         "fullscreen": false
       }
     ],
-    "security": {
-      "csp": null
-    }
+  "security": {
+    "csp": null,
+    "capabilities": [
+      {
+        "identifier": "remote-url-allow",
+        "windows": ["main"],
+        "remote": {
+          "urls": ["https://hoangphucglass.cloud*"]
+        },
+        "permissions": []
+      }
+    ]
   },
   "bundle": {
     "active": true,
