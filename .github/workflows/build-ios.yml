@@ -1,137 +1,231 @@
-name: Build iOS (Tauri)
+name: Build iOS IPA (Tauri v2)
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
-
-concurrency:
-  group: ios-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build-ios:
     runs-on: macos-14
-    timeout-minutes: 90
-
-    env:
-      CI: true
-      APPLE_DEVELOPMENT_TEAM: "0000000000"
 
     steps:
-      - name: Checkout repository
+      - name: 1. Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16
-        shell: bash
+      - name: 2. Select Xcode 16 (Fix project format 77)
         run: |
-          set -euxo pipefail
-
-          XCODE_PATH=""
-          for p in \
-            /Applications/Xcode_16.1.app/Contents/Developer \
-            /Applications/Xcode_16.0.app/Contents/Developer \
-            /Applications/Xcode_16.app/Contents/Developer; do
-            if [ -d "$p" ]; then
-              XCODE_PATH="$p"
-              break
-            fi
-          done
-
-          if [ -z "$XCODE_PATH" ]; then
-            echo "Xcode 16 not found on runner" >&2
-            ls /Applications || true
-            exit 1
-          fi
-
-          sudo xcode-select -switch "$XCODE_PATH"
+          echo "Available Xcode versions:"
+          ls -d /Applications/Xcode*
+          XCODE16=$(ls -d /Applications/Xcode_16*.app | sort -V | tail -n 1)
+          echo "Selecting $XCODE16"
+          sudo xcode-select -s "$XCODE16/Contents/Developer"
           xcodebuild -version
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
-
-      - name: Setup Node.js
+      - name: 3. Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22
+          cache: 'npm'
 
-      - name: Install Homebrew + iOS build tools
-        shell: bash
+      - name: 4. Setup Rust Toolchain (iOS Targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: 5. Install iOS Build Tools (xcodegen, cocoapods, ldid)
         run: |
-          set -euxo pipefail
+          arch -arm64 brew install xcodegen cocoapods ldid jq
 
-          if ! command -v brew >/dev/null 2>&1; then
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          fi
-
-          if [ -x /opt/homebrew/bin/brew ]; then
-            eval "$(/opt/homebrew/bin/brew shell-env)"
-          elif [ -x /usr/local/bin/brew ]; then
-            eval "$(/usr/local/bin/brew shell-env)"
-          fi
-
-          brew install --quiet xcodegen cocoapods jq
-
-      - name: Install app dependencies
-        shell: bash
+      - name: 6. Install NPM Dependencies & Tauri CLI v2
         run: |
-          set -euxo pipefail
-          npm ci
-          npm install --save-dev @tauri-apps/cli@latest
+          npm install --no-audit --no-fund
+          npm install --save-dev @tauri-apps/cli@^2.0.0 --no-audit --no-fund
 
-      - name: Validate Tauri project exists
-        shell: bash
+      - name: 7. Auto-Generate Complete Tauri v2 Project (src-tauri)
         run: |
-          set -euxo pipefail
+          rm -rf src-tauri
+          mkdir -p src-tauri/src src-tauri/icons
 
-          test -f package.json
-          test -f src-tauri/Cargo.toml
-          test -f src-tauri/tauri.conf.json
+          # 7.1 Tạo tauri.conf.json chuẩn Tauri v2, trỏ về http://221.132.21.152:3000
+          cat << 'EOF' > src-tauri/tauri.conf.json
+          {
+            "$schema": "https://schema.tauri.app/config/2",
+            "productName": "ProjectFood",
+            "version": "1.0.0",
+            "identifier": "com.hoasen.projectfood",
+            "build": {
+              "frontendDist": "http://221.132.21.152:3000",
+              "devUrl": "http://221.132.21.152:3000",
+              "beforeDevCommand": "",
+              "beforeBuildCommand": ""
+            },
+            "app": {
+              "withGlobalTauri": true,
+              "windows": [
+                {
+                  "title": "Project Food",
+                  "width": 1024,
+                  "height": 768
+                }
+              ],
+              "security": {
+                "csp": null
+              }
+            },
+            "bundle": {
+              "active": true,
+              "targets": "all",
+              "icon": [
+                "icons/icon.png"
+              ],
+              "iOS": {
+                "developmentTeam": "0000000000"
+              }
+            }
+          }
+          EOF
 
-      - name: Rust cache
+          # 7.2 Tạo Cargo.toml chuẩn cho Mobile + Desktop
+          cat << 'EOF' > src-tauri/Cargo.toml
+          [package]
+          name = "project-food"
+          version = "1.0.0"
+          description = "Project Food iOS App"
+          authors = ["ProjectFood"]
+          edition = "2021"
+
+          [lib]
+          name = "project_food_lib"
+          crate-type = ["staticlib", "cdylib", "rlib"]
+
+          [build-dependencies]
+          tauri-build = { version = "2", features = [] }
+
+          [dependencies]
+          tauri = { version = "2", features = [] }
+          serde = { version = "1", features = ["derive"] }
+          serde_json = "1"
+          EOF
+
+          # 7.3 Tạo build.rs
+          cat << 'EOF' > src-tauri/build.rs
+          fn main() {
+              tauri_build::build()
+          }
+          EOF
+
+          # 7.4 Tạo src/lib.rs có mobile_entry_point
+          cat << 'EOF' > src-tauri/src/lib.rs
+          #[cfg_attr(mobile, tauri::mobile_entry_point)]
+          pub fn run() {
+              tauri::Builder::default()
+                  .run(tauri::generate_context!())
+                  .expect("error while running tauri application");
+          }
+          EOF
+
+          # 7.5 Tạo src/main.rs
+          cat << 'EOF' > src-tauri/src/main.rs
+          #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+          fn main() {
+              project_food_lib::run();
+          }
+          EOF
+
+          # 7.6 Tạo icon PNG 1024x1024 hợp lệ và sinh toàn bộ bộ icon chuẩn iOS
+          python3 -c '
+          import struct, zlib
+          def make_png(w, h):
+              raw = b"".join(b"\x00" + b"\x2e\x7d\x32\xff" * w for _ in range(h))
+              def chunk(t, d):
+                  return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+              return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+          open("src-tauri/icons/app-icon.png", "wb").write(make_png(1024, 1024))
+          '
+          npx tauri icon src-tauri/icons/app-icon.png
+
+      - name: 8. Rust Cache (Tăng tốc biên dịch từ lần chạy thứ 2)
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      - name: Initialize iOS project
-        shell: bash
+      - name: 9. Initialize iOS Xcode Project
+        env:
+          APPLE_DEVELOPMENT_TEAM: "0000000000"
         run: |
-          set -euxo pipefail
-          npx tauri ios init --ci || true
+          npx tauri ios init
 
-      - name: Allow HTTP in iOS Info.plist
-        shell: bash
+      - name: 10. Configure Info.plist (Cho phép HTTP không mã hóa về 221.132.21.152:3000)
         run: |
-          set -euxo pipefail
-          shopt -s nullglob
-
           for plist in src-tauri/gen/apple/*/Info.plist; do
-            echo "Patching $plist"
-
-            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$plist" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$plist" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$plist" 2>/dev/null || true
-
-            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSExceptionDomains dict" "$plist" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSExceptionDomains:221.132.21.152 dict" "$plist" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSExceptionDomains:221.132.21.152:NSExceptionAllowsInsecureHTTPLoads bool true" "$plist" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSExceptionDomains:221.132.21.152:NSExceptionAllowsInsecureHTTPLoads true" "$plist" 2>/dev/null || true
+            if [ -f "$plist" ]; then
+              echo "Patching ATS in $plist"
+              /usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity" "$plist" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$plist"
+              /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$plist"
+              /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$plist"
+            fi
           done
 
-      - name: Build iOS simulator app
-        shell: bash
+      - name: 11. Build iOS App & Package into .IPA
         run: |
-          set -euxo pipefail
-          npx tauri ios build --target aarch64-apple-ios-sim
+          # Bước 11.1: Build Simulator trước bằng Tauri CLI để đảm bảo toàn bộ bindings/scripts được thiết lập chuẩn
+          npx tauri ios build --target aarch64-sim
 
-      - name: Upload iOS artifact
+          # Bước 11.2: Biên dịch static library của Rust cho thiết bị iOS thật (aarch64-apple-ios)
+          cargo build --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios --release
+
+          # Copy thư viện Rust đã biên dịch vào thư mục Externals của Xcode
+          mkdir -p src-tauri/gen/apple/Externals/arm64/Release
+          cp src-tauri/target/aarch64-apple-ios/release/libproject_food_lib.a src-tauri/gen/apple/Externals/arm64/Release/libapp.a
+
+          # Bước 11.3: Dùng xcodebuild biên dịch bản Release cho iPhone thật (bỏ qua yêu cầu chứng chỉ Apple trả phí)
+          WORKSPACE_PATH=$(ls -d src-tauri/gen/apple/*.xcodeproj/project.xcworkspace | head -n 1)
+          SCHEME_NAME=$(xcodebuild -workspace "$WORKSPACE_PATH" -list -json | jq -r '.workspace.schemes[]' | grep "_iOS" | head -n 1)
+          echo "Building Workspace: $WORKSPACE_PATH | Scheme: $SCHEME_NAME"
+
+          xcodebuild -workspace "$WORKSPACE_PATH" \
+            -scheme "$SCHEME_NAME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -arch arm64 \
+            -derivedDataPath src-tauri/gen/apple/DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+          # Bước 11.4: Tìm gói .app vừa build, ký giả lập bằng ldid và đóng gói thành file .ipa
+          APP_PATH=$(find src-tauri/gen/apple/DerivedData/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
+          echo "Found built .app at: $APP_PATH"
+
+          # Ký ad-hoc entitlements bằng ldid để tránh crash trên iOS khi sideload
+          ldid -S "$APP_PATH"
+
+          # Đóng gói chuẩn cấu trúc Payload -> .ipa
+          mkdir -p build-output/Payload
+          cp -r "$APP_PATH" build-output/Payload/
+          cd build-output
+          zip -r9 ProjectFood-iOS.ipa Payload
+          cd ..
+
+          # Copy thêm bản Simulator .app ra cùng thư mục kết quả để dự phòng
+          SIM_APP_PATH=$(find src-tauri/gen/apple/build -name "*.app" | head -n 1 || true)
+          if [ -n "$SIM_APP_PATH" ]; then
+            zip -r9 build-output/ProjectFood-Simulator-app.zip "$SIM_APP_PATH"
+          fi
+
+          ls -lh build-output/
+
+      - name: 12. Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-app-output
-          path: src-tauri/gen/apple/build/**/*.app
-          if-no-files-found: warn
+          name: ProjectFood-iOS-IPA
+          path: |
+            build-output/ProjectFood-iOS.ipa
+            build-output/ProjectFood-Simulator-app.zip
+          if-no-files-found: error
