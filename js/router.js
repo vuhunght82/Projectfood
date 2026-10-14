@@ -95,7 +95,11 @@ async function navigateTo(path) {
         path = '/orders';
     }
     if (!routes[path]) {
-        path = '/menu-cards';
+        path = '/orders';
+    }
+
+    if (typeof window.closeMobileNavMenu === 'function') {
+        window.closeMobileNavMenu();
     }
 
     window.history.pushState({}, "", path);
@@ -452,6 +456,65 @@ if (typeof io === 'function') {
     });
 }
 
+// ==========================================
+// ĐIỀU KHIỂN MENU DỌC ĐỔ XUỐNG TRÊN ĐIỆN THOẠI & TABLET
+// ==========================================
+window.toggleMobileNavMenu = function(e) {
+    if (e) e.stopPropagation();
+    const navTabs = document.querySelector('.nav-tabs');
+    const toggleBtn = document.getElementById('mobileMenuToggleBtn');
+    const toggleIcon = document.getElementById('mobileMenuToggleIcon');
+    const backdrop = document.getElementById('mobileNavBackdrop');
+    if (!navTabs) return;
+
+    const isOpen = navTabs.classList.toggle('mobile-menu-open');
+    if (toggleBtn) toggleBtn.classList.toggle('active', isOpen);
+    if (backdrop) backdrop.classList.toggle('show', isOpen);
+    if (toggleIcon) {
+        if (isOpen) {
+            toggleIcon.classList.remove('fa-bars');
+            toggleIcon.classList.add('fa-xmark');
+        } else {
+            toggleIcon.classList.remove('fa-xmark');
+            toggleIcon.classList.add('fa-bars');
+        }
+    }
+};
+
+window.closeMobileNavMenu = function() {
+    const navTabs = document.querySelector('.nav-tabs');
+    const toggleBtn = document.getElementById('mobileMenuToggleBtn');
+    const toggleIcon = document.getElementById('mobileMenuToggleIcon');
+    const backdrop = document.getElementById('mobileNavBackdrop');
+    if (navTabs) navTabs.classList.remove('mobile-menu-open');
+    if (toggleBtn) toggleBtn.classList.remove('active');
+    if (backdrop) backdrop.classList.remove('show');
+    if (toggleIcon) {
+        toggleIcon.classList.remove('fa-xmark');
+        toggleIcon.classList.add('fa-bars');
+    }
+};
+
+// Điều khiển menu con dạng dọc trên điện thoại (VD: các tab trong Quản lý hệ thống)
+window.toggleMobileSubTabs = function(containerId, btnEl) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const isOpen = container.classList.toggle('mobile-subtabs-open');
+    if (btnEl) btnEl.classList.toggle('open', isOpen);
+};
+
+// Tự động đóng menu dọc khi nhấn phím Escape hoặc xoay/phóng to màn hình sang Desktop
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        window.closeMobileNavMenu();
+    }
+});
+window.addEventListener('resize', () => {
+    if (window.innerWidth > 991.98) {
+        window.closeMobileNavMenu();
+    }
+});
+
 // Khởi chạy ứng dụng khi DOM sẵn sàng
 document.addEventListener('DOMContentLoaded', () => {
     loadBrandConfigGlobal();
@@ -462,8 +525,13 @@ document.addEventListener('DOMContentLoaded', () => {
             initialPath = '/';
         }
     } else {
-        if (!routes[initialPath]) {
-            initialPath = '/menu-cards';
+        const roleUpper = String(user.Role || user.role || '').toUpperCase().trim();
+        const username = String(user.User_name || user.username || '').toLowerCase().trim();
+        const isManager = ['ADMIN', 'QUẢN LÝ', 'QUANLY', 'MANAGER'].includes(roleUpper) || username === 'admin' || username === 'vu';
+        if (isManager && (initialPath === '/' || !routes[initialPath])) {
+            initialPath = '/orders';
+        } else if (!routes[initialPath]) {
+            initialPath = '/orders';
         }
     }
     navigateTo(initialPath);

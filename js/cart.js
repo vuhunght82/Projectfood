@@ -128,12 +128,54 @@ window.initCart = function() {
             nameInput.value = window.cartAppliedMember.Full_name;
         }
         window.renderCartMemberAppliedCard();
+        // Làm mới dữ liệu hội viên (đặc biệt là trạng thái quà sinh nhật) từ máy chủ
+        if (window.cartAppliedMember.Phone) {
+            fetch(`/api/members/lookup?q=${encodeURIComponent(window.cartAppliedMember.Phone)}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d && d.success && d.found && d.member) {
+                        window.cartAppliedMember = d.member;
+                        try { sessionStorage.setItem('hoasen_applied_member', JSON.stringify(d.member)); } catch (e) {}
+                        window.renderCartMemberAppliedCard();
+                    }
+                })
+                .catch(() => {});
+        }
+    } else {
+        // Hỗ trợ chuyển hướng nhanh từ trang Quản lý Hội Viên (Sinh nhật tuần này -> Chọn quà tại giỏ hàng)
+        const prefillPhone = sessionStorage.getItem('hoasen_prefill_member_phone');
+        if (prefillPhone) {
+            sessionStorage.removeItem('hoasen_prefill_member_phone');
+            const phoneInput = document.getElementById('cartMemberPhoneInput');
+            if (phoneInput) phoneInput.value = prefillPhone;
+            setTimeout(() => {
+                if (typeof window.cartLookupMember === 'function') {
+                    window.cartLookupMember(prefillPhone);
+                }
+            }, 250);
+        }
     }
 
     window.renderCart();
     window.updateFloatingCartBadge();
     window.togglePaymentInfo();
     window.checkCartTableAddMoreStatus();
+};
+
+// Helper lấy đơn giá món ăn chuẩn xác (giữ nguyên 0đ cho món Quà Sinh Nhật Hội Viên)
+window.getCartItemPrice = function(item) {
+    if (!item) return 0;
+    const itemName = String(item.name || item.Item_name || '');
+    if (item.isBirthdayGift || itemName.includes('[Quà Sinh Nhật')) {
+        return 0;
+    }
+    if (item.price !== undefined && item.price !== null && item.price !== '') {
+        return Number(item.price);
+    }
+    if (item.Unit_price !== undefined && item.Unit_price !== null && item.Unit_price !== '') {
+        return Number(item.Unit_price);
+    }
+    return 35000;
 };
 
 // ==========================================
@@ -449,8 +491,9 @@ window.renderCart = function() {
 
     let total = 0;
     tbody.innerHTML = cart.map((item, index) => {
-        const price = Number(item.price || item.Unit_price || 35000);
-        const qty = Number(item.quantity || item.Quantity || 1);
+        const isBirthdayGift = Boolean(item.isBirthdayGift || String(item.name || item.Item_name || '').includes('[Quà Sinh Nhật'));
+        const price = window.getCartItemPrice(item);
+        const qty = isBirthdayGift ? 1 : Number(item.quantity || item.Quantity || 1);
         const itemTotal = price * qty;
         total += itemTotal;
 
@@ -467,11 +510,14 @@ window.renderCart = function() {
         const isAddMoreMode = sessionStorage.getItem('hoasen_is_add_more') === '1';
         const isThisItemAddMore = (itemNote && itemNote.includes('[Gọi thêm]')) || isAddMoreMode;
         const addMoreBadge = isThisItemAddMore ? `<span class="badge bg-danger text-white me-1 px-2 py-1 shadow-sm" style="font-size: 11px;"><i class="fa-solid fa-plus me-1"></i>Gọi thêm</span>` : '';
+        const bdayGiftBadge = isBirthdayGift ? `<span class="badge bg-danger text-white me-1 px-2 py-1 shadow-sm" style="font-size: 11px;"><i class="fa-solid fa-cake-candles me-1"></i>Quà Sinh Nhật (0đ)</span>` : '';
+        const displayItemName = isBirthdayGift ? (item.giftRawName || String(item.name || item.Item_name || '').replace(/^\[Quà Sinh Nhật[^\]]*\]\s*/i, '')) : (item.name || item.Item_name);
 
         return `
-            <tr style="border-bottom: 1px solid #f0f0f0;">
+            <tr style="border-bottom: 1px solid #f0f0f0; ${isBirthdayGift ? 'background-color: #fff5f5;' : ''}">
                 <td style="padding: 10px 8px; font-size: 13px; vertical-align: top;">
-                    <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">${addMoreBadge}<span>${item.name || item.Item_name}</span></div>
+                    <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">${addMoreBadge}${bdayGiftBadge}<span>${displayItemName}</span></div>
+                    ${isBirthdayGift && item.refPrice ? `<div class="small text-danger fw-semibold" style="font-size: 11px;"><i class="fa-solid fa-gift me-1"></i>Quà tặng sinh nhật hội viên (Trị giá: <del>${Number(item.refPrice).toLocaleString('vi-VN')}đ</del> → Miễn phí 0đ)</div>` : ''}
                     ${toppingsHtml}
                     <div class="mt-1">
                         <input type="text" class="form-control form-control-sm item-note-input" 
@@ -482,14 +528,18 @@ window.renderCart = function() {
                     </div>
                 </td>
                 <td class="text-center" style="padding: 10px 4px; width: 105px; vertical-align: top;">
-                    <div class="input-group input-group-sm">
-                        <button class="btn btn-outline-secondary px-2" type="button" onclick="window.updateCartQty(${index}, -1)">-</button>
-                        <input type="text" class="form-control text-center px-1 fw-bold" value="${qty}" readonly style="font-size: 12px;">
-                        <button class="btn btn-outline-secondary px-2" type="button" onclick="window.updateCartQty(${index}, 1)">+</button>
-                    </div>
+                    ${isBirthdayGift ? `
+                        <span class="badge bg-light text-danger border border-danger-subtle fw-bold px-2 py-1" title="Quà sinh nhật chỉ tặng 1 phần/năm">1 phần (Cố định)</span>
+                    ` : `
+                        <div class="input-group input-group-sm">
+                            <button class="btn btn-outline-secondary px-2" type="button" onclick="window.updateCartQty(${index}, -1)">-</button>
+                            <input type="text" class="form-control text-center px-1 fw-bold" value="${qty}" readonly style="font-size: 12px;">
+                            <button class="btn btn-outline-secondary px-2" type="button" onclick="window.updateCartQty(${index}, 1)">+</button>
+                        </div>
+                    `}
                 </td>
-                <td class="text-end fw-bold text-success" style="padding: 10px 8px; font-size: 13px; vertical-align: top; white-space: nowrap;">
-                    ${new Intl.NumberFormat('vi-VN').format(itemTotal)} đ
+                <td class="text-end fw-bold ${isBirthdayGift ? 'text-danger' : 'text-success'}" style="padding: 10px 8px; font-size: 13px; vertical-align: top; white-space: nowrap;">
+                    ${isBirthdayGift ? '0 đ (Tặng)' : `${new Intl.NumberFormat('vi-VN').format(itemTotal)} đ`}
                 </td>
                 <td class="text-center" style="padding: 10px 4px; width: 36px; vertical-align: top;">
                     <button class="btn btn-sm text-danger p-0 border-0" onclick="window.removeCartItem(${index})" title="Xóa món">
@@ -522,6 +572,20 @@ window.updateCartQty = function(index, delta) {
     if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
 
     if (cart[index]) {
+        if (cart[index].isBirthdayGift || String(cart[index].name || '').includes('[Quà Sinh Nhật')) {
+            if (delta > 0) {
+                if (window.toast) window.toast.warning('Quà tặng sinh nhật chỉ áp dụng tối đa 01 phần trong tuần sinh nhật!');
+                return;
+            }
+            cart.splice(index, 1);
+            localStorage.setItem('hoasen_cart', JSON.stringify(cart));
+            localStorage.setItem('restaurant_cart', JSON.stringify(cart));
+            window.renderCart();
+            window.renderCartMemberAppliedCard();
+            window.updateFloatingCartBadge();
+            return;
+        }
+
         let currentQty = Number(cart[index].quantity || cart[index].Quantity || 1);
         currentQty += delta;
         
@@ -548,6 +612,7 @@ window.removeCartItem = function(index) {
     localStorage.setItem('hoasen_cart', JSON.stringify(cart));
     localStorage.setItem('restaurant_cart', JSON.stringify(cart));
     window.renderCart();
+    window.renderCartMemberAppliedCard();
     window.updateFloatingCartBadge();
 };
 
@@ -678,9 +743,96 @@ window.renderCartMemberAppliedCard = function() {
     const b = m.birthdayInfo || {};
     const l = m.lunarInfo || {};
 
-    let bdayBadge = '';
+    let cart = JSON.parse(localStorage.getItem('hoasen_cart') || '[]');
+    if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
+    const currentGiftInCart = cart.find(item => item.isBirthdayGift || String(item.name || item.Item_name || '').includes('[Quà Sinh Nhật'));
+
+    let bdaySectionHtml = '';
     if (b.isBirthdaySoon) {
-        bdayBadge = `<div class="alert alert-danger py-1 px-2 mb-2 small text-center fw-bold rounded-2">🎂 Sinh nhật tuần này: ${t.birthdayReward || 'Ưu đãi đặc biệt'}</div>`;
+        if (b.hasReceivedGiftThisYear && b.giftRecord) {
+            const rec = b.giftRecord;
+            const giftedTime = rec.Gifted_at ? new Date(rec.Gifted_at).toLocaleString('vi-VN') : '';
+            bdaySectionHtml = `
+                <div class="p-2 p-sm-3 mb-2 rounded-3 border border-success shadow-sm" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-left: 5px solid #16a34a !important;">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-1">
+                        <span class="fw-bold text-success" style="font-size: 13px;">
+                            <i class="fa-solid fa-cake-candles me-1"></i> Tuần Sinh Nhật (${b.dayMonth || ''}) — ĐÃ TẶNG QUÀ NĂM ${b.birthYear || new Date().getFullYear()}
+                        </span>
+                        <span class="badge bg-success text-white px-2 py-1" style="font-size: 10.5px;">
+                            <i class="fa-solid fa-check-double me-1"></i> Đã nhận 1/1 lần
+                        </span>
+                    </div>
+                    <div class="small text-dark bg-white p-2 rounded-2 border border-success-subtle mt-1" style="font-size: 12px;">
+                        <div>🎁 Món quà đã nhận: <b class="text-danger">${rec.Gift_name}</b> (0đ)</div>
+                        <div class="d-flex flex-wrap gap-2 mt-1 text-secondary" style="font-size: 11px;">
+                            <span>🧾 Đơn hàng: <b class="text-dark">#${rec.Order_code}</b></span>
+                            <span>• Bàn: <b>${rec.Table_number || 'Tại quán'}</b></span>
+                            <span>• NV tặng: <b>${rec.Staff_name || '---'}</b></span>
+                            ${giftedTime ? `<span>• Lúc: <b>${giftedTime}</b></span>` : ''}
+                        </div>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size: 11px;">
+                        <i class="fa-solid fa-shield-halved text-success me-1"></i> Quy định: Mỗi hội viên chỉ nhận quà sinh nhật <b>01 lần duy nhất</b> trong tuần sinh nhật hàng năm.
+                    </div>
+                </div>
+            `;
+        } else {
+            const giftItems = Array.isArray(b.availableGiftItems) ? b.availableGiftItems : [];
+            const optionsHtml = giftItems.length > 0
+                ? giftItems.map(g => {
+                    const isSelected = currentGiftInCart && Number(currentGiftInCart.giftId) === Number(g.Gift_id) ? 'selected' : '';
+                    const priceText = g.Ref_price ? ` (Trị giá ${Number(g.Ref_price).toLocaleString('vi-VN')}đ → Tặng 0đ)` : ' (Tặng 0đ)';
+                    return `<option value="${g.Gift_id}" ${isSelected}>🎁 ${g.Gift_name}${priceText}</option>`;
+                }).join('')
+                : `<option value="0">🎁 Đĩa trái cây tráng miệng tươi mát (Tặng 0đ)</option>`;
+
+            bdaySectionHtml = `
+                <div class="p-2 p-sm-3 mb-2 rounded-3 border border-danger shadow-sm" style="background: linear-gradient(135deg, #fff5f5, #ffe4e6); border-left: 5px solid #dc2626 !important;">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-1 mb-1">
+                        <div class="fw-bold text-danger" style="font-size: 13.5px;">
+                            <i class="fa-solid fa-bell fa-shake me-1"></i> THÔNG BÁO: KHÁCH ĐỦ ĐIỀU KIỆN NHẬN QUÀ SINH NHẬT!
+                        </div>
+                        <span class="badge bg-danger text-white px-2 py-1" style="font-size: 10.5px;">
+                            🎂 Sinh nhật ${b.dayMonth || ''} (${b.daysUntil === 0 ? 'Hôm nay!' : `Còn ${b.daysUntil} ngày`})
+                        </span>
+                    </div>
+                    <div class="small text-dark mb-2" style="font-size: 12px; line-height: 1.4;">
+                        💬 <b>Nhắc nhân viên:</b> Khách <b>${m.Full_name}</b> đang trong tuần sinh nhật và <b>chưa nhận quà năm ${b.birthYear || new Date().getFullYear()}</b>. Vui lòng chủ động hỏi khách có muốn nhận quà sinh nhật không, sau đó chọn 1 món bên dưới để đặt vào đơn (0đ):
+                    </div>
+
+                    ${currentGiftInCart ? `
+                        <div class="p-2 bg-white rounded-2 border border-success d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <div class="small">
+                                <span class="badge bg-success me-1"><i class="fa-solid fa-check me-1"></i>Đã thêm vào giỏ (0đ)</span>
+                                <b class="text-danger">${currentGiftInCart.giftRawName || currentGiftInCart.name}</b>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 fw-bold" style="font-size: 11px;" onclick="window.cartRemoveBirthdayGiftFromCart()">
+                                <i class="fa-solid fa-trash-can me-1"></i> Khách chưa nhận / Bỏ quà
+                            </button>
+                        </div>
+                    ` : ''}
+
+                    <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center">
+                        <select id="cartBirthdayGiftSelect" class="form-select form-select-sm fw-bold border-danger text-dark" style="font-size: 12.5px;">
+                            ${optionsHtml}
+                        </select>
+                        <button type="button" class="btn btn-sm btn-danger fw-bold px-3 py-1 flex-shrink-0 shadow-sm" onclick="window.cartAddBirthdayGiftToOrder()" style="white-space: nowrap; font-size: 12.5px;">
+                            <i class="fa-solid fa-gift me-1"></i> ${currentGiftInCart ? 'Đổi Món Quà Khác' : 'Chọn & Đặt Quà (0đ)'}
+                        </button>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size: 11px;">
+                        <i class="fa-solid fa-circle-info text-danger me-1"></i> Ghi nhận minh bạch tên món & mã đơn hàng vào lịch sử tài khoản khách hàng (Chỉ tặng 1 lần/tuần sinh nhật).
+                    </div>
+                </div>
+            `;
+        }
+    } else if (b.hasReceivedGiftThisYear && b.giftRecord) {
+        bdaySectionHtml = `
+            <div class="alert alert-light border py-1 px-2 mb-2 small d-flex justify-content-between align-items-center" style="font-size: 11.5px;">
+                <span>🎂 Quà sinh nhật ${b.birthYear}: <b>${b.giftRecord.Gift_name}</b></span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">Đã nhận (Đơn #${b.giftRecord.Order_code})</span>
+            </div>
+        `;
     }
 
     let lunarBadge = '';
@@ -694,7 +846,7 @@ window.renderCartMemberAppliedCard = function() {
     else if (m.Current_tier === 'SEN_KIM_CUONG') tierBadge = `<span class="badge fw-bold px-2 py-1 text-white shadow-sm" style="background: linear-gradient(135deg, #6a1b9a, #ffd700);"><i class="fa-solid fa-gem me-1"></i>Sen Kim Cương (Giảm 15% + Tích 5%)</span>`;
 
     area.innerHTML = `
-        ${bdayBadge}
+        ${bdaySectionHtml}
         <div class="p-2 p-sm-3 rounded-3 bg-white border mb-2 shadow-sm">
             <!-- Dòng 1: Tên khách hàng & Các nút thao tác -->
             <div class="d-flex justify-content-between align-items-center mb-1 pb-1 border-bottom gap-2">
@@ -748,6 +900,87 @@ window.renderCartMemberAppliedCard = function() {
     `;
 };
 
+// Chọn & Đặt món quà sinh nhật (0đ) vào giỏ hàng cho hội viên đang áp dụng
+window.cartAddBirthdayGiftToOrder = function() {
+    const m = window.cartAppliedMember;
+    if (!m) {
+        if (window.toast) window.toast.warning('Vui lòng áp dụng thẻ hội viên trước khi chọn quà sinh nhật!');
+        return;
+    }
+    const b = m.birthdayInfo || {};
+    if (b.hasReceivedGiftThisYear) {
+        if (window.toast) window.toast.error(`Khách hàng ${m.Full_name} đã nhận quà sinh nhật năm ${b.birthYear} (${b.giftRecord?.Gift_name || ''} - Đơn #${b.giftRecord?.Order_code || ''})! Mỗi năm chỉ tặng 1 lần.`);
+        return;
+    }
+    if (!b.isBirthdaySoon) {
+        if (window.toast) window.toast.warning('Khách hàng hiện không nằm trong tuần lễ sinh nhật!');
+        return;
+    }
+
+    const selectEl = document.getElementById('cartBirthdayGiftSelect');
+    const selectedGiftId = selectEl ? Number(selectEl.value) : 0;
+    const giftItems = Array.isArray(b.availableGiftItems) ? b.availableGiftItems : [];
+    let chosenGift = giftItems.find(g => Number(g.Gift_id) === selectedGiftId) || giftItems[0];
+
+    if (!chosenGift) {
+        chosenGift = {
+            Gift_id: 0,
+            Gift_name: 'Đĩa trái cây tráng miệng tươi mát',
+            Ref_price: 45000
+        };
+    }
+
+    let cart = JSON.parse(localStorage.getItem('hoasen_cart') || '[]');
+    if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
+
+    // Xóa quà sinh nhật cũ trong giỏ (nếu nhân viên bấm đổi món quà khác) để đảm bảo chỉ có đúng 1 món quà 0đ
+    cart = cart.filter(item => !(item.isBirthdayGift || String(item.name || item.Item_name || '').includes('[Quà Sinh Nhật')));
+
+    cart.push({
+        id: `BDAY_GIFT_${chosenGift.Gift_id}`,
+        Item_id: null,
+        name: `[Quà Sinh Nhật 0đ] ${chosenGift.Gift_name}`,
+        Item_name: `[Quà Sinh Nhật 0đ] ${chosenGift.Gift_name}`,
+        giftRawName: chosenGift.Gift_name,
+        giftId: chosenGift.Gift_id,
+        refPrice: Number(chosenGift.Ref_price || 0),
+        price: 0,
+        Unit_price: 0,
+        quantity: 1,
+        Quantity: 1,
+        isBirthdayGift: true,
+        note: `🎂 Quà tặng sinh nhật hội viên: ${m.Full_name} (${m.Phone})`,
+        toppings: []
+    });
+
+    localStorage.setItem('hoasen_cart', JSON.stringify(cart));
+    localStorage.setItem('restaurant_cart', JSON.stringify(cart));
+
+    window.renderCart();
+    window.renderCartMemberAppliedCard();
+    window.updateFloatingCartBadge();
+    if (window.toast) {
+        window.toast.success(`🎁 Đã đặt món quà sinh nhật "${chosenGift.Gift_name}" (0đ) vào đơn cho khách ${m.Full_name}!`);
+    }
+};
+
+// Xóa món quà sinh nhật khỏi giỏ hàng (nếu khách chưa muốn nhận hôm nay)
+window.cartRemoveBirthdayGiftFromCart = function() {
+    let cart = JSON.parse(localStorage.getItem('hoasen_cart') || '[]');
+    if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
+
+    const beforeLen = cart.length;
+    cart = cart.filter(item => !(item.isBirthdayGift || String(item.name || item.Item_name || '').includes('[Quà Sinh Nhật')));
+    if (cart.length !== beforeLen) {
+        localStorage.setItem('hoasen_cart', JSON.stringify(cart));
+        localStorage.setItem('restaurant_cart', JSON.stringify(cart));
+        window.renderCart();
+        window.renderCartMemberAppliedCard();
+        window.updateFloatingCartBadge();
+        if (window.toast) window.toast.info('Đã bỏ món quà sinh nhật khỏi giỏ hàng.');
+    }
+};
+
 // Đổi sang thẻ thành viên khác
 window.cartChangeAppliedMember = function() {
     window.cartRemoveAppliedMember();
@@ -773,6 +1006,16 @@ window.cartRemoveAppliedMember = function() {
     const nameInput = document.getElementById('cartCustomerName');
     if (nameInput && nameInput.value) {
         nameInput.value = 'Khách vãng lai';
+    }
+
+    // Nếu trong giỏ có món quà sinh nhật của hội viên vừa xóa thì tự động gỡ khỏi giỏ
+    let cart = JSON.parse(localStorage.getItem('hoasen_cart') || '[]');
+    if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
+    const filteredCart = cart.filter(item => !(item.isBirthdayGift || String(item.name || item.Item_name || '').includes('[Quà Sinh Nhật')));
+    if (filteredCart.length !== cart.length) {
+        localStorage.setItem('hoasen_cart', JSON.stringify(filteredCart));
+        localStorage.setItem('restaurant_cart', JSON.stringify(filteredCart));
+        window.updateFloatingCartBadge();
     }
 
     const discRow = document.getElementById('cartMemberDiscountRow');
@@ -886,7 +1129,7 @@ window.cartApplyVoucher = async function() {
 
     let cart = JSON.parse(localStorage.getItem('hoasen_cart') || '[]');
     if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
-    const totalCalc = cart.reduce((sum, item) => sum + (Number(item.price || item.Unit_price || 35000) * Number(item.quantity || item.Quantity || 1)), 0);
+    const totalCalc = cart.reduce((sum, item) => sum + (window.getCartItemPrice(item) * Number(item.quantity || item.Quantity || 1)), 0);
     const isAddMore = sessionStorage.getItem('hoasen_is_add_more') === '1';
     const oldAmount = isAddMore ? Number(sessionStorage.getItem('hoasen_table_current_amount') || 0) : 0;
     const currentSubtotal = oldAmount + totalCalc;
@@ -952,7 +1195,18 @@ window.cartOpenOtpVerifyModal = function(member) {
     const errEl = document.getElementById('cartOtpVerifyError');
 
     if (nameEl) nameEl.innerText = member.Full_name || 'Khách Hàng';
-    if (phoneEl) phoneEl.innerText = `${member.Phone || ''} (${member.tierInfo?.name || 'Mầm Sen'})`;
+    if (phoneEl) {
+        const b = member.birthdayInfo || {};
+        let bdayNotice = '';
+        if (b.isBirthdaySoon) {
+            if (b.hasReceivedGiftThisYear && b.giftRecord) {
+                bdayNotice = `<div class="badge bg-success-subtle text-success border border-success-subtle mt-1 d-block" style="white-space: normal;">🎂 Tuần sinh nhật (Đã nhận quà: ${b.giftRecord.Gift_name} - Đơn #${b.giftRecord.Order_code})</div>`;
+            } else {
+                bdayNotice = `<div class="badge bg-danger text-white mt-1 d-block py-1" style="white-space: normal;">🎂 Đủ điều kiện nhận Quà Sinh Nhật tuần này (Chưa nhận)!</div>`;
+            }
+        }
+        phoneEl.innerHTML = `<div>${member.Phone || ''} (${member.tierInfo?.name || 'Mầm Sen'})</div>${bdayNotice}`;
+    }
     if (codeInput) {
         codeInput.value = '';
         setTimeout(() => codeInput.focus(), 300);
@@ -1054,7 +1308,14 @@ window.cartApplyVerifiedMember = function(member) {
 
     window.renderCartMemberAppliedCard();
     window.renderCart();
-    if (window.toast) window.toast.success(`🛡️ Đã xác thực bảo mật & áp dụng thẻ: ${member.Full_name}!`);
+    if (window.toast) {
+        const b = member.birthdayInfo || {};
+        if (b.isBirthdaySoon && !b.hasReceivedGiftThisYear) {
+            window.toast.success(`🎂 Khách ${member.Full_name} đang trong tuần sinh nhật và đủ điều kiện nhận 01 món quà sinh nhật (0đ)! Hãy hỏi khách và chọn món trên giỏ hàng.`);
+        } else {
+            window.toast.success(`🛡️ Đã xác thực bảo mật & áp dụng thẻ: ${member.Full_name}!`);
+        }
+    }
 };
 
 // ==========================================
@@ -1759,7 +2020,7 @@ window.updateCartTotal = function(total) {
         let cart = JSON.parse(localStorage.getItem('hoasen_cart') || '[]');
         if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
         total = cart.reduce((sum, item) => {
-            const price = Number(item.price || item.Unit_price || 35000);
+            const price = window.getCartItemPrice(item);
             const qty = Number(item.quantity || item.Quantity || 1);
             return sum + (price * qty);
         }, 0);
@@ -1838,23 +2099,15 @@ window.updateCartTotal = function(total) {
 
     if (m) {
         const t = m.tierInfo || {};
-        // Điểm thưởng
+        // Điểm thưởng (Giảm trừ trực tiếp trên hóa đơn trước thuế)
         const maxPointsCanUse = Math.min(Number(m.Reward_points || 0), Math.floor(runningAmount / 1000));
         pointsUsed = Math.min(Number(window.cartPointsToUse || 0), maxPointsCanUse);
         pointsAmount = pointsUsed * 1000;
         runningAmount = Math.max(0, runningAmount - pointsAmount);
 
-        // Ví trả trước: CHỈ KHI chọn phương thức PREPAID
-        if (selectedMethod === 'PREPAID') {
-            prepaidUsed = Math.min(Number(m.Prepaid_balance || 0), runningAmount);
-            runningAmount = Math.max(0, runningAmount - prepaidUsed);
-        } else {
-            prepaidUsed = 0;
-        }
-
-        // Tích lũy điểm (3% hoặc 5%, nhân đôi nếu ngày rằm/mùng 1)
+        // Tích lũy điểm (3% hoặc 5%, nhân đôi nếu ngày rằm/mùng 1) tính trên doanh thu thuần sau chiết khấu/voucher
         const actualPointRate = Number(t.actualPointRate || t.pointRate || 0.03);
-        const amountForPointCalc = Math.max(0, subtotal - discountAmount - voucherDiscount);
+        const amountForPointCalc = Math.max(0, subtotal - discountAmount - voucherDiscount - pointsAmount);
         pointsEarned = Math.floor((amountForPointCalc * actualPointRate) / 1000);
 
         // Hiển thị dòng điểm
@@ -1871,18 +2124,6 @@ window.updateCartTotal = function(total) {
             }
         }
 
-        // Hiển thị dòng ví trả trước
-        const prepRow = document.getElementById('cartPrepaidUsedRow');
-        const prepAmt = document.getElementById('cartPrepaidUsedAmount');
-        if (prepRow) {
-            if (selectedMethod === 'PREPAID' && prepaidUsed > 0) {
-                prepRow.style.setProperty('display', 'flex', 'important');
-                if (prepAmt) prepAmt.innerText = `-${new Intl.NumberFormat('vi-VN').format(prepaidUsed)} đ`;
-            } else {
-                prepRow.style.setProperty('display', 'none', 'important');
-            }
-        }
-
         // Thông báo tích lũy điểm
         const earnNotice = document.getElementById('cartPointsEarnNotice');
         if (earnNotice) {
@@ -1892,13 +2133,13 @@ window.updateCartTotal = function(total) {
     } else {
         const ptsRow = document.getElementById('cartPointsUsedRow');
         if (ptsRow) ptsRow.style.setProperty('display', 'none', 'important');
-        const prepRow = document.getElementById('cartPrepaidUsedRow');
-        if (prepRow) prepRow.style.setProperty('display', 'none', 'important');
         const earnNotice = document.getElementById('cartPointsEarnNotice');
         if (earnNotice) earnNotice.innerHTML = '';
     }
 
-    // Cấu hình thuế VAT từ hệ thống
+    // CHUẨN NGHIỆP VỤ KẾ TOÁN:
+    // Thuế VAT được tính trên doanh thu thuần SAU KHI TRỪ các khoản chiết khấu/khuyến mại/voucher/điểm thưởng,
+    // và TRƯỚC KHI trừ phương thức thanh toán Ví Trả Trước.
     let sysConfig = {};
     try {
         sysConfig = JSON.parse(localStorage.getItem('hoasen_system_config') || '{}');
@@ -1908,14 +2149,15 @@ window.updateCartTotal = function(total) {
     const vatRate = parseFloat(sysConfig.vat_rate || 8) || 8;
     const vatIncluded = (sysConfig.vat_included_in_price === true || sysConfig.vat_included_in_price === '1' || sysConfig.vat_included_in_price === 1 || sysConfig.vat_included_in_price === 'true');
 
+    const taxableAmountAfterPromo = runningAmount;
     let vatAmount = 0;
-    if (vatEnabled && runningAmount > 0) {
+    if (vatEnabled && taxableAmountAfterPromo > 0) {
         if (vatIncluded) {
-            // Giá món đã bao gồm VAT -> Tách thuế ra để hiển thị
-            vatAmount = Math.round(runningAmount - (runningAmount / (1 + vatRate / 100)));
+            // Giá món đã bao gồm VAT -> Tách thuế trên số tiền sau ưu đãi để hiển thị
+            vatAmount = Math.round(taxableAmountAfterPromo - (taxableAmountAfterPromo / (1 + vatRate / 100)));
         } else {
-            // Giá món chưa có VAT -> Cộng thêm VAT vào tổng hóa đơn
-            vatAmount = Math.round(runningAmount * (vatRate / 100));
+            // Giá món chưa có VAT -> Cộng thêm VAT (tính trên số tiền sau ưu đãi) vào tổng hóa đơn
+            vatAmount = Math.round(taxableAmountAfterPromo * (vatRate / 100));
             runningAmount += vatAmount;
         }
     }
@@ -1925,13 +2167,32 @@ window.updateCartTotal = function(total) {
     const vatLbl = document.getElementById('cartVatLabel');
     const vatAmt = document.getElementById('cartVatAmount');
     if (vatRow) {
-        if (vatEnabled && (vatAmount > 0 || runningAmount > 0)) {
+        if (vatEnabled && (vatAmount > 0 || taxableAmountAfterPromo > 0)) {
             vatRow.style.setProperty('display', 'flex', 'important');
-            if (vatLbl) vatLbl.innerHTML = vatIncluded ? `<i class="fa-solid fa-receipt me-1 text-secondary"></i>Đã gồm VAT (${vatRate}%):` : `<i class="fa-solid fa-receipt me-1 text-secondary"></i>Thuế VAT (${vatRate}%):`;
+            if (vatLbl) vatLbl.innerHTML = vatIncluded ? `<i class="fa-solid fa-receipt me-1 text-secondary"></i>Đã gồm VAT (${vatRate}% sau ưu đãi):` : `<i class="fa-solid fa-receipt me-1 text-secondary"></i>Thuế VAT (${vatRate}% sau ưu đãi):`;
             if (vatAmt) vatAmt.innerText = (vatIncluded ? '' : '+') + new Intl.NumberFormat('vi-VN').format(vatAmount) + ' đ';
         } else {
             vatRow.style.setProperty('display', 'none', 'important');
         }
+    }
+
+    // Sau khi đã xác định Tổng giá trị thanh toán hóa đơn (đã gồm VAT), mới trừ Ví Trả Trước (nếu khách chọn thanh toán bằng Ví)
+    const prepRow = document.getElementById('cartPrepaidUsedRow');
+    const prepAmt = document.getElementById('cartPrepaidUsedAmount');
+    if (m && selectedMethod === 'PREPAID') {
+        prepaidUsed = Math.min(Number(m.Prepaid_balance || 0), runningAmount);
+        runningAmount = Math.max(0, runningAmount - prepaidUsed);
+        if (prepRow) {
+            if (prepaidUsed > 0) {
+                prepRow.style.setProperty('display', 'flex', 'important');
+                if (prepAmt) prepAmt.innerText = `-${new Intl.NumberFormat('vi-VN').format(prepaidUsed)} đ`;
+            } else {
+                prepRow.style.setProperty('display', 'none', 'important');
+            }
+        }
+    } else {
+        prepaidUsed = 0;
+        if (prepRow) prepRow.style.setProperty('display', 'none', 'important');
     }
 
     window.lastCalcVatEnabled = vatEnabled;
@@ -1991,7 +2252,7 @@ window.togglePaymentInfo = async function() {
     let cart = JSON.parse(localStorage.getItem('hoasen_cart') || '[]');
     if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
     const totalCalc = cart.reduce((sum, item) => {
-        const price = Number(item.price || item.Unit_price || 35000);
+        const price = window.getCartItemPrice(item);
         const qty = Number(item.quantity || item.Quantity || 1);
         return sum + (price * qty);
     }, 0);
@@ -2169,7 +2430,7 @@ window.updateCartMomoQrLive = function() {
 
     let cart = JSON.parse(localStorage.getItem('hoasen_cart') || '[]');
     if (cart.length === 0) cart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
-    const totalCalc = cart.reduce((sum, item) => sum + (Number(item.price || item.Unit_price || 35000) * Number(item.quantity || item.Quantity || 1)), 0);
+    const totalCalc = cart.reduce((sum, item) => sum + (window.getCartItemPrice(item) * Number(item.quantity || item.Quantity || 1)), 0);
     const isAddMore = sessionStorage.getItem('hoasen_is_add_more') === '1';
     const oldAmount = isAddMore ? Number(sessionStorage.getItem('hoasen_table_current_amount') || 0) : 0;
     const totalPay = isAddMore ? (oldAmount + totalCalc) : totalCalc;
@@ -2238,7 +2499,7 @@ window.printCartBill = function() {
 
     let totalAmount = 0;
     const itemsRows = cart.map((item, idx) => {
-        const price = Number(item.price || item.Unit_price || 0);
+        const price = window.getCartItemPrice(item);
         const qty = Number(item.quantity || item.Quantity || 1);
         const itemTotal = price * qty;
         totalAmount += itemTotal;
@@ -2270,87 +2531,88 @@ window.printCartBill = function() {
     }).join('');
 
     const m = window.cartAppliedMember;
+    const discPercent = window.lastCalcDiscountPercent || 0;
+    const discAmt = window.lastCalcDiscountAmount || 0;
+    const voucherAmt = window.lastCalcVoucherDiscount || 0;
+    const ptsUsed = window.lastCalcPointsUsed || 0;
+    const ptsAmt = window.lastCalcPointsAmount || 0;
+    const prepUsed = window.lastCalcPrepaidUsed || 0;
+    const ptsEarned = window.lastCalcPointsEarned || 0;
+
+    // 1. Doanh thu tính thuế sau khi trừ các khoản chiết khấu/khuyến mại/điểm thưởng
+    const taxableAfterPromo = Math.max(0, totalAmount - discAmt - voucherAmt - ptsAmt);
+
+    // 2. Cấu hình thuế VAT (tính trên giá trị sau ưu đãi, TRƯỚC khi trừ Ví trả trước)
+    const vatEnabled = (sysConfig.vat_enabled === true || sysConfig.vat_enabled === '1' || sysConfig.vat_enabled === 'true');
+    const vatRate = parseFloat(sysConfig.vat_rate || 8) || 8;
+    const vatIncluded = (sysConfig.vat_included_in_price === true || sysConfig.vat_included_in_price === '1' || sysConfig.vat_included_in_price === 1 || sysConfig.vat_included_in_price === 'true');
+
+    let vatAmt = 0;
+    let vatRowHtml = '';
+    if (vatEnabled && taxableAfterPromo > 0) {
+        if (vatIncluded) {
+            vatAmt = Math.round(taxableAfterPromo - (taxableAfterPromo / (1 + vatRate / 100)));
+            vatRowHtml = `
+                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
+                    <span>Đã gồm VAT (${vatRate}% sau ưu đãi):</span>
+                    <span>${new Intl.NumberFormat('vi-VN').format(vatAmt)} đ</span>
+                </div>
+            `;
+        } else {
+            vatAmt = Math.round(taxableAfterPromo * (vatRate / 100));
+            vatRowHtml = `
+                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
+                    <span>Thuế VAT (${vatRate}% sau ưu đãi):</span>
+                    <span>+${new Intl.NumberFormat('vi-VN').format(vatAmt)} đ</span>
+                </div>
+            `;
+        }
+    }
+
+    const totalInvoiceAfterVat = vatEnabled && !vatIncluded ? (taxableAfterPromo + vatAmt) : taxableAfterPromo;
+    const finalPayable = (window.lastCalcFinalTotal !== undefined)
+        ? window.lastCalcFinalTotal
+        : Math.max(0, totalInvoiceAfterVat - prepUsed);
+
     let loyaltyBreakdownHtml = '';
-    let finalPayable = totalAmount;
-
-    if (m) {
-        const discPercent = window.lastCalcDiscountPercent || 0;
-        const discAmt = window.lastCalcDiscountAmount || 0;
-        const ptsUsed = window.lastCalcPointsUsed || 0;
-        const ptsAmt = window.lastCalcPointsAmount || 0;
-        const prepUsed = window.lastCalcPrepaidUsed || 0;
-        const ptsEarned = window.lastCalcPointsEarned || 0;
-        finalPayable = (window.lastCalcFinalTotal !== undefined) ? window.lastCalcFinalTotal : Math.max(0, totalAmount - discAmt - ptsAmt - prepUsed);
-
+    if (m || voucherAmt > 0) {
         loyaltyBreakdownHtml = `
             <div style="font-size: 11.5px; margin-top: 4px; border-top: 1px dotted #666; padding-top: 4px;">
+                ${m ? `
                 <div style="display: flex; justify-content: space-between;">
                     <span>Hội viên:</span>
                     <span><b>${m.Full_name}</b> (${m.tierInfo?.name || 'Mầm Sen'})</span>
-                </div>
+                </div>` : ''}
                 ${discAmt > 0 ? `
                 <div style="display: flex; justify-content: space-between;">
                     <span>Chiết khấu (${discPercent}%):</span>
                     <span>-${new Intl.NumberFormat('vi-VN').format(discAmt)} đ</span>
                 </div>` : ''}
-                ${(window.lastCalcVoucherDiscount || 0) > 0 ? `
+                ${voucherAmt > 0 ? `
                 <div style="display: flex; justify-content: space-between;">
                     <span>Voucher (${window.cartAppliedVoucher?.code || 'Ưu đãi'}):</span>
-                    <span>-${new Intl.NumberFormat('vi-VN').format(window.lastCalcVoucherDiscount)} đ</span>
+                    <span>-${new Intl.NumberFormat('vi-VN').format(voucherAmt)} đ</span>
                 </div>` : ''}
                 ${ptsAmt > 0 ? `
                 <div style="display: flex; justify-content: space-between;">
                     <span>Dùng điểm (${ptsUsed} điểm):</span>
                     <span>-${new Intl.NumberFormat('vi-VN').format(ptsAmt)} đ</span>
                 </div>` : ''}
-                ${prepUsed > 0 ? `
-                <div style="display: flex; justify-content: space-between;">
-                    <span>Ví Trả Trước:</span>
-                    <span>-${new Intl.NumberFormat('vi-VN').format(prepUsed)} đ</span>
-                </div>` : ''}
-            </div>
-            <div style="font-size: 11px; margin-top: 3px; font-style: italic;">
-                + Điểm tích lũy đơn này: +${ptsEarned} điểm
-            </div>
-        `;
-    } else if ((window.lastCalcVoucherDiscount || 0) > 0) {
-        finalPayable = (window.lastCalcFinalTotal !== undefined) ? window.lastCalcFinalTotal : Math.max(0, totalAmount - (window.lastCalcVoucherDiscount || 0));
-        loyaltyBreakdownHtml = `
-            <div style="font-size: 11.5px; margin-top: 4px; border-top: 1px dotted #666; padding-top: 4px;">
-                <div style="display: flex; justify-content: space-between;">
-                    <span>Voucher (${window.cartAppliedVoucher?.code || 'Ưu đãi'}):</span>
-                    <span>-${new Intl.NumberFormat('vi-VN').format(window.lastCalcVoucherDiscount)} đ</span>
-                </div>
             </div>
         `;
     }
 
-    // Cấu hình thuế VAT cho bản in tạm tính
-    const vatEnabled = (sysConfig.vat_enabled === true || sysConfig.vat_enabled === '1' || sysConfig.vat_enabled === 'true');
-    const vatRate = parseFloat(sysConfig.vat_rate || 8) || 8;
-    const vatIncluded = (sysConfig.vat_included_in_price === true || sysConfig.vat_included_in_price === '1' || sysConfig.vat_included_in_price === 1 || sysConfig.vat_included_in_price === 'true');
-
-    let vatRowHtml = '';
-    if (vatEnabled) {
-        if (vatIncluded) {
-            const vatAmt = Math.round(finalPayable - (finalPayable / (1 + vatRate / 100)));
-            vatRowHtml = `
-                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
-                    <span>Đã gồm VAT (${vatRate}%):</span>
-                    <span>${new Intl.NumberFormat('vi-VN').format(vatAmt)} đ</span>
-                </div>
-            `;
-        } else {
-            const vatAmt = Math.round(finalPayable * (vatRate / 100));
-            finalPayable += vatAmt;
-            vatRowHtml = `
-                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
-                    <span>Thuế VAT (${vatRate}%):</span>
-                    <span>+${new Intl.NumberFormat('vi-VN').format(vatAmt)} đ</span>
-                </div>
-            `;
-        }
-    }
+    const prepaidAndPointsFooterHtml = `
+        ${prepUsed > 0 ? `
+        <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
+            <span>Trừ Ví Trả Trước:</span>
+            <span>-${new Intl.NumberFormat('vi-VN').format(prepUsed)} đ</span>
+        </div>` : ''}
+        ${m && ptsEarned > 0 ? `
+        <div style="font-size: 11px; margin-top: 3px; font-style: italic;">
+            + Điểm tích lũy đơn này: +${ptsEarned} điểm
+        </div>` : ''}
+    `;
 
     // QR Code
     let qrHtml = '';
@@ -2374,9 +2636,7 @@ window.printCartBill = function() {
         }
     }
 
-    const win = window.open('', '_blank', 'width=450,height=650');
-    if (!win) return;
-    win.document.write(`
+    const preBillHtml = `
         <!DOCTYPE html>
         <html>
             <head>
@@ -2436,8 +2696,9 @@ window.printCartBill = function() {
                     </div>
                     ${loyaltyBreakdownHtml}
                     ${vatRowHtml}
+                    ${prepaidAndPointsFooterHtml}
                     <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: bold; margin-top: 4px; border-top: 1px dashed #000; padding-top: 4px;">
-                        <span>CẦN THANH TOÁN:</span>
+                        <span>THỰC THU:</span>
                         <span>${new Intl.NumberFormat('vi-VN').format(finalPayable)} đ</span>
                     </div>
                 </div>
@@ -2449,15 +2710,50 @@ window.printCartBill = function() {
                 </div>
             </body>
         </html>
-    `);
-    win.document.close();
-    win.focus();
-    setTimeout(() => {
-        win.print();
-        win.close();
-    }, 350);
+    `;
 
-    if (window.toast) window.toast.success('Đang mở bản in tạm tính...');
+    const escposPayload = {
+        type: 'RECEIPT',
+        paperSize,
+        resName,
+        resAddr,
+        resPhone,
+        title: 'PHIEU TAM TINH',
+        orderCode: 'TAM-TINH',
+        tableName: `${tableNumber} (${orderType})`,
+        staffName,
+        timeStr: printTime,
+        items: cart.map(item => {
+            const p = window.getCartItemPrice(item);
+            const q = Number(item.quantity || 1);
+            return {
+                name: item.name || 'Mon chay',
+                qty: q,
+                price: p,
+                total: p * q,
+                note: item.note || ''
+            };
+        }),
+        note: cartNote,
+        totals: {
+            grossAmount: totalAmount,
+            discountAmount: memberDiscountAmount + voucherDiscountAmount + pointsDiscountAmount,
+            vatAmount: (!vatIncluded && vatEnabled) ? vatAmount : 0,
+            prepaidUsed: prepaidPayAmount,
+            finalPayable
+        },
+        footer: billFooter
+    };
+
+    if (typeof window.printThermalHtml === 'function') {
+        window.printThermalHtml(preBillHtml, {
+            paperWidth,
+            printerRole: 'RECEIPT',
+            escposPayload
+        });
+    } else {
+        window.print();
+    }
 };
 
 // ==========================================
@@ -2515,7 +2811,7 @@ window.submitCartOrder = async function() {
     }
 
     const totalCalc = cart.reduce((sum, item) => {
-        const price = Number(item.price || item.Unit_price || 35000);
+        const price = window.getCartItemPrice(item);
         const qty = Number(item.quantity || item.Quantity || 1);
         return sum + (price * qty);
     }, 0);
@@ -2583,9 +2879,13 @@ window.submitCartOrder = async function() {
             id: i.id || i.Item_id,
             name: i.name || i.Item_name,
             quantity: Number(i.quantity || i.Quantity || 1),
-            price: Number(i.price || i.Unit_price || 35000),
+            price: window.getCartItemPrice(i),
             note: i.note || '',
-            toppings: Array.isArray(i.toppings) ? i.toppings : []
+            toppings: Array.isArray(i.toppings) ? i.toppings : [],
+            isBirthdayGift: Boolean(i.isBirthdayGift || String(i.name || i.Item_name || '').includes('[Quà Sinh Nhật')),
+            giftId: i.giftId || null,
+            giftRawName: i.giftRawName || null,
+            refPrice: Number(i.refPrice || 0)
         }))
     };
 
@@ -2597,6 +2897,10 @@ window.submitCartOrder = async function() {
         });
 
         const data = await res.json();
+        if (!res.ok || data.error) {
+            if (window.toast) window.toast.error(data.error || 'Không thể gửi đơn hàng!');
+            return;
+        }
         const displayCode = editingOrderId || data.Order_code || 'CHAY-NEW';
 
         // Máy chủ (routes/orders.js) đã tự động phát socket 'kitchen_new_order' và 'table_updated' chính xác cho toàn bộ thiết bị

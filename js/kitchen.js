@@ -1021,12 +1021,13 @@ function announceKitchenOrderVoice(orderData) {
 }
 
 // Hàm in phiếu chế biến cho Bếp (Ticket Bếp)
-window.printKitchenTicket = function(order) {
+window.printKitchenTicket = async function(order) {
     if (!order) return;
     try {
         const sysConfig = JSON.parse(localStorage.getItem('hoasen_system_config') || '{}');
         const paperSize = sysConfig.kitchen_paper_size || sysConfig.paperSize || '80mm';
         const paperWidth = (paperSize === '58mm') ? '58mm' : '80mm';
+        const resName = sysConfig.resName || 'NHÀ HÀNG CHAY HOA SEN';
 
         let targetOrder = order;
         if (Array.isArray(window.kitchenOrdersCache) && order.Order_id) {
@@ -1055,9 +1056,7 @@ window.printKitchenTicket = function(order) {
             `;
         }).join('');
 
-        const win = window.open('', '_blank', 'width=420,height=600');
-        if (!win) return;
-        win.document.write(`
+        const ticketHtml = `
             <!DOCTYPE html>
             <html>
                 <head>
@@ -1076,16 +1075,37 @@ window.printKitchenTicket = function(order) {
                     <div>${itemsHtml}</div>
                     ${note ? `<div style="margin-top: 8px; padding: 6px; border: 1px solid #000; font-weight: bold; font-size: 12px;">GHI CHÚ: ${note}</div>` : ''}
                     <hr style="border: 1px solid #000; margin: 6px 0;">
-                    <script>
-                        window.onload = function() {
-                            window.print();
-                            setTimeout(function() { window.close(); }, 600);
-                        };
-                    <\/script>
                 </body>
             </html>
-        `);
-        win.document.close();
+        `;
+
+        const escposPayload = {
+            type: 'KITCHEN',
+            paperSize,
+            resName,
+            title: 'PHIEU BEP CHE BIEN',
+            orderCode,
+            tableName,
+            staffName: targetOrder.Staff_name || 'Bep',
+            timeStr,
+            items: items.map(it => ({
+                name: it.Item_name || it.name || 'Mon chay',
+                qty: Number(it.Quantity || it.quantity || 1),
+                toppings: it.Toppings || it.toppings || '',
+                note: it.Note || it.note || ''
+            })),
+            note
+        };
+
+        if (typeof window.printThermalHtml === 'function') {
+            await window.printThermalHtml(ticketHtml, {
+                paperWidth,
+                printerRole: 'KITCHEN',
+                escposPayload
+            });
+        } else {
+            window.print();
+        }
     } catch (err) {
         console.error('Lỗi in phiếu bếp:', err);
     }

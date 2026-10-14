@@ -7,15 +7,20 @@ window.allOrdersData = [];
 window.chartInstances = {};
 
 // Lắng nghe Socket.IO Realtime
-if (window.socket) {
-    window.socket.off('order_status_updated');
-    window.socket.on('order_status_updated', function(data) {
+function setupOrdersSocketListeners() {
+    const socket = window.socket || (typeof io === 'function' ? io(window.location.origin) : null);
+    if (!socket) return;
+    window.socket = socket;
+
+    socket.off('order_status_updated');
+    socket.on('order_status_updated', function(data) {
         console.log('⚡ Realtime cập nhật đơn hàng:', data);
         if (Array.isArray(window.allOrdersData)) {
             const targetIndex = window.allOrdersData.findIndex(o => 
                 String(o.Order_id) === String(data.Order_id) || 
                 String(o.Order_code) === String(data.Order_code || data.Order_id) ||
-                String(o.Order_code) === ('CHAY-' + data.Order_id)
+                String(o.Order_code) === ('CHAY-' + data.Order_id) ||
+                String(o.Order_id) === String(data.Order_code)
             );
             if (targetIndex !== -1) {
                 if (data.Status) window.allOrdersData[targetIndex].Status = data.Status;
@@ -25,34 +30,37 @@ if (window.socket) {
                 if (data.Payment_status !== undefined) window.allOrdersData[targetIndex].Payment_status = data.Payment_status;
                 if (data.Paid_by !== undefined) window.allOrdersData[targetIndex].Paid_by = data.Paid_by;
                 if (data.Paid_at !== undefined) window.allOrdersData[targetIndex].Paid_at = data.Paid_at;
+                window.applyOrderFilters();
             } else {
                 window.loadOrders();
                 return;
             }
+        } else {
+            window.loadOrders();
         }
-        window.applyOrderFilters();
     });
 
-    window.socket.off('kitchen_new_order');
-    window.socket.on('kitchen_new_order', function() {
+    socket.off('kitchen_new_order');
+    socket.on('kitchen_new_order', function() {
         if (typeof window.loadOrders === 'function') window.loadOrders();
     });
 
-    window.socket.off('tables_list_changed');
-    window.socket.on('tables_list_changed', function() {
+    socket.off('tables_list_changed');
+    socket.on('tables_list_changed', function() {
         if (typeof window.loadOrders === 'function') window.loadOrders();
     });
 
-    window.socket.off('table_updated');
-    window.socket.on('table_updated', function() {
+    socket.off('table_updated');
+    socket.on('table_updated', function() {
         if (typeof window.loadOrders === 'function') window.loadOrders();
     });
 
-    window.socket.off('table_cleared');
-    window.socket.on('table_cleared', function() {
+    socket.off('table_cleared');
+    socket.on('table_cleared', function() {
         if (typeof window.loadOrders === 'function') window.loadOrders();
     });
 }
+setupOrdersSocketListeners();
 
 // 1. PHÂN QUYỀN 3 TAB ĐƠN HÀNG, BÁO CÁO & KPI TOÀN QUÁN
 window.applyOrderTabPermissions = function() {
@@ -234,6 +242,7 @@ window.handleTimeRangeChange = function() {
 
 // 2. LOAD DANH SÁCH ĐƠN HÀNG TỪ SERVER
 window.loadOrders = async function() {
+    setupOrdersSocketListeners();
     const tbody = document.getElementById('ordersTableBody');
     if (!tbody) return;
 
@@ -376,12 +385,14 @@ window.applyOrderFilters = function() {
         return true;
     });
 
-    // TÍNH TOÁN 4 THẺ CHỈ SỐ KPI TỔNG QUAN
+    // TÍNH TOÁN 4 THẺ CHỈ SỐ KPI TỔNG QUAN & ĐỐI SOÁT SỔ KÉT
     let servingCount = 0;
     let unpaidServingCount = 0;
     let completedCount = 0;
     let canceledCount = 0;
-    let totalRevenue = 0;
+    let totalActualRevenue = 0;
+    let totalPromoDiscountKpi = 0;
+    let totalPrepaidUsedKpi = 0;
 
     filtered.forEach(o => {
         const statusRaw = String(o.Status || o.status || '').toUpperCase();
@@ -392,8 +403,7 @@ window.applyOrderFilters = function() {
             Boolean(o.Cancel_role) || 
             String(o.Cancel_reason || '').toLowerCase().includes('hủy')
         );
-        const amount = Number(o.Final_amount || o.Total_amount || 0);
-        const isDineIn = (o.Order_type === 'DINE_IN' || Boolean(o.Table_number));
+        const fin = window.computeOrderFinancials(o);
         const isTableOccupied = Boolean(o.isTableServing);
         const isNotDone = !['COMPLETED', 'SERVED', 'DONE'].includes(statusRaw);
 
@@ -401,16 +411,16 @@ window.applyOrderFilters = function() {
             canceledCount++;
         } else {
             const isServing = isTableOccupied || isNotDone;
+            totalPromoDiscountKpi += fin.totalPromoDiscount;
+            totalPrepaidUsedKpi += fin.prepaidUsed;
+
             if (isServing) {
-                // Đang phục vụ / đang xử lý
                 servingCount++;
                 if (!isPaid) unpaidServingCount++;
-                // Nếu khách đã thanh toán trước (tiền mặt ngay lúc đặt đơn) thì cộng vào doanh thu
-                if (isPaid && amount > 0) totalRevenue += amount;
+                if (isPaid && fin.actualCollected > 0) totalActualRevenue += fin.actualCollected;
             } else {
-                // Đã hoàn thành (đã giao xong, bàn đã giải phóng)
                 completedCount++;
-                if (amount > 0) totalRevenue += amount;
+                if (fin.actualCollected > 0) totalActualRevenue += fin.actualCollected;
             }
         }
     });
@@ -432,7 +442,12 @@ window.applyOrderFilters = function() {
 
     const kpiRevEl = document.getElementById('kpiTotalRevenue');
     if (kpiRevEl) {
-        kpiRevEl.innerText = new Intl.NumberFormat('vi-VN').format(totalRevenue) + ' đ';
+        kpiRevEl.innerText = new Intl.NumberFormat('vi-VN').format(totalActualRevenue) + ' đ';
+    }
+
+    const kpiRevSubEl = document.getElementById('kpiRevenueSubtext');
+    if (kpiRevSubEl) {
+        kpiRevSubEl.innerHTML = `KM: <b class="text-danger">-${new Intl.NumberFormat('vi-VN').format(totalPromoDiscountKpi)}đ</b> • Ví: <b class="text-info">-${new Intl.NumberFormat('vi-VN').format(totalPrepaidUsedKpi)}đ</b>`;
     }
 
     // Cập nhật số lượng và text tóm tắt
@@ -457,6 +472,75 @@ window.applyOrderFilters = function() {
     if (!document.getElementById('tab-orders-stats')?.classList.contains('d-none')) {
         window.renderOrderStatistics();
     }
+};
+
+// HÀM CHUẨN HÓA KẾ TOÁN ĐƠN HÀNG: TIỀN MÓN GỐC -> TRỪ KM/ƯU ĐÃI -> CỘNG VAT SAU KM -> TRỪ VÍ TRẢ TRƯỚC -> THỰC THU SỔ/KÉT
+window.computeOrderFinancials = function(order) {
+    if (!order) {
+        return {
+            grossAmount: 0,
+            memberDiscount: 0,
+            voucherDiscount: 0,
+            pointsDiscount: 0,
+            totalPromoDiscount: 0,
+            afterPromoAmount: 0,
+            vatExtra: 0,
+            invoiceTotal: 0,
+            prepaidUsed: 0,
+            actualCollected: 0
+        };
+    }
+
+    let sumItems = 0;
+    const items = Array.isArray(order.items) ? order.items : (Array.isArray(order.Items) ? order.Items : []);
+    if (items.length > 0) {
+        sumItems = items.reduce((s, i) => {
+            const qty = Number(i.Quantity || i.quantity || 1);
+            const price = Number(i.Unit_price || i.price || 0);
+            return s + (Number(i.Total_price) || (price * qty));
+        }, 0);
+    }
+
+    const grossAmount = sumItems > 0 ? sumItems : Number(order.Total_amount || order.Final_amount || 0);
+    const memberDiscount = Number(order.Discount_amount || 0);
+    const voucherDiscount = Number(order.Voucher_discount || 0);
+    const pointsDiscount = Number(order.Points_amount || 0);
+    const totalPromoDiscount = memberDiscount + voucherDiscount + pointsDiscount;
+
+    // Doanh thu chịu thuế sau khi trừ các khoản chiết khấu/khuyến mại/điểm thưởng
+    const afterPromoAmount = Math.max(0, grossAmount - totalPromoDiscount);
+    const prepaidUsed = Number(order.Prepaid_used || 0);
+    const recordedFinal = Number(order.Final_amount || 0);
+
+    let vatExtra = 0;
+    let invoiceTotal = afterPromoAmount;
+    let actualCollected = 0;
+
+    if (recordedFinal > 0 || prepaidUsed > 0 || totalPromoDiscount > 0) {
+        // Nếu tổng thanh toán thực tế (Thực thu + Ví trả trước) cao hơn giá sau KM -> phần chênh lệch chính là thuế VAT cộng thêm sau ưu đãi
+        if (recordedFinal + prepaidUsed > afterPromoAmount) {
+            vatExtra = (recordedFinal + prepaidUsed) - afterPromoAmount;
+        }
+        invoiceTotal = afterPromoAmount + vatExtra;
+        actualCollected = Math.max(0, invoiceTotal - prepaidUsed);
+    } else {
+        // Đơn cũ chưa ghi nhận Final_amount riêng và không có KM/Ví
+        invoiceTotal = grossAmount;
+        actualCollected = grossAmount;
+    }
+
+    return {
+        grossAmount,
+        memberDiscount,
+        voucherDiscount,
+        pointsDiscount,
+        totalPromoDiscount,
+        afterPromoAmount,
+        vatExtra,
+        invoiceTotal,
+        prepaidUsed,
+        actualCollected
+    };
 };
 
 // 4. RENDER BẢNG ĐƠN HÀNG (SẠCH CODE - ĐÁNH DẤU VÀNG/ĐỎ RÕ RÀNG)
@@ -505,14 +589,11 @@ window.renderOrdersTable = function(orders) {
 
         // Tóm tắt món ăn
         let itemsSummary = '';
-        let calcTotal = 0;
 
         if (Array.isArray(order.items) && order.items.length > 0) {
             itemsSummary = order.items.map(i => {
                 const name = i.Item_name || i.name;
                 const qty = Number(i.Quantity || i.quantity || 1);
-                const price = Number(i.Unit_price || i.price || 0);
-                calcTotal += (i.Total_price ? Number(i.Total_price) : price * qty);
                 const note = i.Note || i.note || '';
                 const toppings = i.Toppings || i.toppings || '';
                 let extraHtml = '';
@@ -522,14 +603,14 @@ window.renderOrdersTable = function(orders) {
             }).join('');
         } else if (order.items_summary) {
             itemsSummary = order.items_summary;
-            calcTotal = Number(order.Final_amount || order.Total_amount || 0);
         } else {
             itemsSummary = 'Chi tiết đơn hàng';
-            calcTotal = Number(order.Final_amount || order.Total_amount || 0);
         }
 
-        const finalTotal = calcTotal > 0 ? calcTotal : Number(order.Final_amount || 0);
-        const totalFormatted = new Intl.NumberFormat('vi-VN').format(finalTotal);
+        const fin = window.computeOrderFinancials(order);
+        const fmt = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(Number(n || 0)));
+        const grossFormatted = fmt(fin.grossAmount);
+        const actualFormatted = fmt(fin.actualCollected);
 
         // 🎨 ĐẶT MÀU NỀN TRỰC TIẾP CHO TỪNG Ô Ô TD ĐỂ CHỐNG GHI ĐÈ CSS
         let tdBgStyle = '';
@@ -636,14 +717,42 @@ window.renderOrdersTable = function(orders) {
             memberBadge += `</div>`;
         }
 
-        let discountSubtext = '';
-        if (Number(order.Discount_amount || 0) > 0 || Number(order.Points_amount || 0) > 0 || Number(order.Prepaid_used || 0) > 0) {
-            discountSubtext = `<div class="text-muted fw-normal" style="font-size: 10px;">`;
-            if (order.Discount_amount) discountSubtext += `Giảm: -${Number(order.Discount_amount).toLocaleString()}đ<br>`;
-            if (order.Points_amount) discountSubtext += `Điểm: -${Number(order.Points_amount).toLocaleString()}đ<br>`;
-            if (order.Prepaid_used) discountSubtext += `Ví: -${Number(order.Prepaid_used).toLocaleString()}đ`;
-            discountSubtext += `</div>`;
+        const breakdownLines = [];
+        if (fin.memberDiscount > 0) {
+            breakdownLines.push(`<span class="text-danger">Giảm thẻ${order.Discount_percent ? ` (${order.Discount_percent}%)` : ''}: -${fmt(fin.memberDiscount)}đ</span>`);
         }
+        if (fin.voucherDiscount > 0) {
+            breakdownLines.push(`<span class="text-danger">KM/Voucher${order.Voucher_code ? ` (${order.Voucher_code})` : ''}: -${fmt(fin.voucherDiscount)}đ</span>`);
+        }
+        if (fin.pointsDiscount > 0) {
+            breakdownLines.push(`<span class="text-danger">Điểm: -${fmt(fin.pointsDiscount)}đ</span>`);
+        }
+        if (fin.vatExtra > 0) {
+            breakdownLines.push(`<span class="text-secondary">VAT (sau KM): +${fmt(fin.vatExtra)}đ</span>`);
+        }
+        if (fin.prepaidUsed > 0) {
+            breakdownLines.push(`<span class="text-info fw-semibold">Ví trả trước: -${fmt(fin.prepaidUsed)}đ</span>`);
+        }
+
+        const discountSubtext = breakdownLines.length > 0
+            ? `<div class="fw-normal mt-1" style="font-size: 10.5px; line-height: 1.35;">${breakdownLines.join('<br>')}</div>`
+            : '';
+
+        const actualBadgeClass = isCanceled
+            ? 'bg-danger-subtle text-danger border border-danger text-decoration-line-through'
+            : (fin.actualCollected > 0
+                ? 'bg-success-subtle text-success border border-success'
+                : 'bg-secondary-subtle text-secondary border border-secondary');
+
+        const totalCellHtml = `
+            <div class="text-secondary fw-semibold" style="font-size: 11.5px;">Tiền món: <b>${grossFormatted} đ</b></div>
+            ${discountSubtext}
+            <div class="mt-1 pt-1 border-top">
+                <span class="badge ${actualBadgeClass} fw-bold px-2 py-1" style="font-size: 11.5px;">
+                    Thực thu: ${actualFormatted} đ
+                </span>
+            </div>
+        `;
 
         return `
             <tr>
@@ -694,8 +803,7 @@ window.renderOrdersTable = function(orders) {
                 <td ${tdBgStyle} class="text-center align-middle">${statusBadge}</td>
                 <td ${tdBgStyle} class="small">${noteDisplay}</td>
                 <td ${tdBgStyle} class="text-end ${totalStyle}">
-                    <div>${totalFormatted} VNĐ</div>
-                    ${discountSubtext}
+                    ${totalCellHtml}
                 </td>
                 <td ${tdBgStyle} class="text-center small ${isCanceled ? 'text-danger' : 'text-muted'}">${createdAt}</td>
                 <td ${tdBgStyle} class="text-center">
@@ -706,9 +814,17 @@ window.renderOrdersTable = function(orders) {
                                 <i class="fa-solid fa-coins"></i> Thu tiền
                             </button>
                         ` : ''}
-                        ${canEdit ? `<button type="button" class="btn btn-primary fw-bold px-2" title="Sửa Đơn" onclick="window.editOrder('${orderCode}')"><i class="fa-solid fa-pen"></i> Sửa</button>` : ''}
+                        ${(() => {
+                            const isDoneStatus = ['COMPLETED', 'DONE', 'FINISHED', 'SERVED'].includes(statusRaw);
+                            const isLocked = isPaid || isDoneStatus || isCanceled;
+                            if (!canEdit) return '';
+                            if (isLocked) {
+                                return `<button type="button" class="btn btn-outline-secondary fw-bold px-2 opacity-50" title="Đơn đã hoàn tất / đã thu tiền / đã hủy - không thể sửa" disabled><i class="fa-solid fa-lock"></i> Sửa</button>`;
+                            }
+                            return `<button type="button" class="btn btn-primary fw-bold px-2" title="Sửa Đơn" onclick="window.editOrder('${orderCode}')"><i class="fa-solid fa-pen"></i> Sửa</button>`;
+                        })()}
                         ${historyBtn}
-                        <button type="button" class="btn btn-success fw-bold px-2" title="Hoàn Thành" onclick="window.markOrderCompleted('${orderCode}')"><i class="fa-solid fa-check"></i> Xong</button>
+                        ${(!isCanceled && !['COMPLETED', 'DONE', 'FINISHED', 'SERVED'].includes(statusRaw)) ? `<button type="button" class="btn btn-success fw-bold px-2" title="Hoàn Thành" onclick="window.markOrderCompleted('${orderCode}')"><i class="fa-solid fa-check"></i> Xong</button>` : ''}
                         ${(() => {
                             if (!canCancel) return '';
                             const isKitchenAccepted = ['COOKING', 'ACCEPTED', 'READY'].includes(statusRaw);
@@ -1017,8 +1133,6 @@ window.editOrder = function(orderCode) {
 
     // Chuẩn hóa mã đơn (xóa sạch khoảng trắng và dấu #)
     const cleanCode = String(orderCode).replace('#', '').trim();
-    localStorage.setItem('hoasen_edit_order_id', cleanCode);
-    localStorage.setItem('editing_order_id', cleanCode);
 
     // Lấy thông tin đơn hàng
     const order = (window.allOrdersData || []).find(o => 
@@ -1027,6 +1141,21 @@ window.editOrder = function(orderCode) {
         String(o.Order_code || '').trim() === ('CHAY-' + cleanCode) ||
         String(o.Order_code || '').replace('#', '').trim() === cleanCode
     );
+
+    // 🔒 Đơn đã hoàn tất / đã thu tiền / đã hủy thì không cho sửa (chỉ In, Hủy, Xóa theo quyền)
+    if (order) {
+        const st = String(order.Status || order.status || '').toUpperCase();
+        const paid = String(order.Payment_status || '').toUpperCase() === 'PAID';
+        const done = ['COMPLETED', 'DONE', 'FINISHED', 'SERVED'].includes(st);
+        const canceled = ['CANCELED', 'CANCELLED'].includes(st) || Boolean(order.Cancel_role);
+        if (paid || done || canceled) {
+            if (window.toast) window.toast.warning('Đơn hàng đã hoàn tất / đã thu tiền / đã hủy nên không thể sửa. Bạn chỉ có thể In, Hủy hoặc Xóa (nếu có quyền).');
+            return;
+        }
+    }
+
+    localStorage.setItem('hoasen_edit_order_id', cleanCode);
+    localStorage.setItem('editing_order_id', cleanCode);
 
     if (order) {
         sessionStorage.setItem('hoasen_edit_order_data', JSON.stringify(order));
@@ -1120,7 +1249,15 @@ window.renderOrderStatistics = function() {
         document.getElementById('statRangeLabel').innerText = rangeLabelMap[timeRange] || 'Thống kê';
     }
 
-    let totalRevenueFiltered = 0;
+    let totalActualRevenueFiltered = 0;
+    let totalGrossRevenueFiltered = 0;
+    let totalPromoDiscountFiltered = 0;
+    let totalMemberDiscountFiltered = 0;
+    let totalVoucherDiscountFiltered = 0;
+    let totalPointsDiscountFiltered = 0;
+    let totalPrepaidUsedFiltered = 0;
+    let totalVatFiltered = 0;
+
     let totalOrders = filteredOrders.length;
     let canceledCount = 0;
     let dineInCount = 0;
@@ -1150,13 +1287,15 @@ window.renderOrderStatistics = function() {
             if (!cancelRole && cancelReason.includes('bồi')) role = 'Bồi bàn';
             cancelReasonsMap[role] = (cancelReasonsMap[role] || 0) + 1;
         } else {
-            let calcTotal = 0;
-            if (Array.isArray(o.items) && o.items.length > 0) {
-                calcTotal = o.items.reduce((s, i) => s + (Number(i.Total_price) || (Number(i.Unit_price || i.price || 0) * Number(i.Quantity || i.quantity || 1))), 0);
-            } else {
-                calcTotal = Number(o.Final_amount || o.Total_amount || 0);
-            }
-            totalRevenueFiltered += calcTotal;
+            const fin = window.computeOrderFinancials(o);
+            totalActualRevenueFiltered += fin.actualCollected;
+            totalGrossRevenueFiltered += fin.grossAmount;
+            totalPromoDiscountFiltered += fin.totalPromoDiscount;
+            totalMemberDiscountFiltered += fin.memberDiscount;
+            totalVoucherDiscountFiltered += fin.voucherDiscount;
+            totalPointsDiscountFiltered += fin.pointsDiscount;
+            totalPrepaidUsedFiltered += fin.prepaidUsed;
+            totalVatFiltered += fin.vatExtra;
         }
 
         const type = o.Order_type || o.orderType || 'DINE_IN';
@@ -1167,8 +1306,28 @@ window.renderOrderStatistics = function() {
         staffMap[staff] = (staffMap[staff] || 0) + 1;
     });
 
+    const fmt = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(Number(n || 0)));
+
     if (document.getElementById('statTotalRevenue')) {
-        document.getElementById('statTotalRevenue').innerText = new Intl.NumberFormat('vi-VN').format(totalRevenueFiltered) + ' đ';
+        document.getElementById('statTotalRevenue').innerText = fmt(totalActualRevenueFiltered) + ' đ';
+    }
+    if (document.getElementById('statRevenueSubtext')) {
+        document.getElementById('statRevenueSubtext').innerText = 'Tiền thực thu sau KM & Ví trả trước';
+    }
+    if (document.getElementById('statTotalDiscount')) {
+        document.getElementById('statTotalDiscount').innerText = '-' + fmt(totalPromoDiscountFiltered) + ' đ';
+    }
+    if (document.getElementById('statDiscountBreakdown')) {
+        document.getElementById('statDiscountBreakdown').innerText = `Thẻ: -${fmt(totalMemberDiscountFiltered)}đ | Voucher: -${fmt(totalVoucherDiscountFiltered)}đ | Điểm: -${fmt(totalPointsDiscountFiltered)}đ`;
+    }
+    if (document.getElementById('statTotalPrepaidUsed')) {
+        document.getElementById('statTotalPrepaidUsed').innerText = '-' + fmt(totalPrepaidUsedFiltered) + ' đ';
+    }
+    if (document.getElementById('statGrossRevenue')) {
+        document.getElementById('statGrossRevenue').innerText = fmt(totalGrossRevenueFiltered) + ' đ';
+    }
+    if (document.getElementById('statVatSubtext')) {
+        document.getElementById('statVatSubtext').innerText = `Thuế VAT (sau ưu đãi): +${fmt(totalVatFiltered)} đ`;
     }
     if (document.getElementById('statTotalOrders')) {
         document.getElementById('statTotalOrders').innerText = totalOrders;
@@ -1194,13 +1353,8 @@ window.renderOrderStatistics = function() {
 
         const orderDateStr = o.Created_at || o.createdAt || todayStr;
         const orderDate = new Date(orderDateStr);
-
-        let orderMoney = 0;
-        if (Array.isArray(o.items) && o.items.length > 0) {
-            orderMoney = o.items.reduce((s, i) => s + (Number(i.Total_price) || (Number(i.Unit_price || i.price || 0) * Number(i.Quantity || i.quantity || 1))), 0);
-        } else {
-            orderMoney = Number(o.Final_amount || o.Total_amount || 0);
-        }
+        const fin = window.computeOrderFinancials(o);
+        const orderMoney = fin.actualCollected;
 
         if (orderDate.toDateString() === now.toDateString() || orderDateStr.includes(todayStr)) {
             revenueToday += orderMoney;
@@ -1216,7 +1370,7 @@ window.renderOrderStatistics = function() {
         }
     });
 
-    window.createChart('chartRevenueTimeline', 'bar', ['Hôm nay', 'Tuần này', 'Tháng này'], [revenueToday, revenueWeek, revenueMonth], 'Doanh thu (VNĐ)', '#2e7d32');
+    window.createChart('chartRevenueTimeline', 'bar', ['Hôm nay', 'Tuần này', 'Tháng này'], [revenueToday, revenueWeek, revenueMonth], 'Thực thu Sổ & Két (VNĐ)', '#2e7d32');
     window.createChart('chartOrderTypeRatio', 'doughnut', ['Ăn tại quán', 'Mang về'], [dineInCount, takeAwayCount], 'Tỷ lệ', ['#2e7d32', '#f57c00']);
     window.createChart('chartCancelReasons', 'bar', Object.keys(cancelReasonsMap), Object.values(cancelReasonsMap), 'Số đơn hủy', '#d32f2f');
     window.createChart('chartStaffPerformance', 'pie', Object.keys(staffMap), Object.values(staffMap), 'Đơn xử lý', ['#1976d2', '#388e3c', '#fbc02d', '#7b1fa2']);
@@ -1332,21 +1486,12 @@ window.printOrderBill = async function(orderId) {
 
     const orderCode = order?.Order_code || (cleanId.startsWith('CHAY-') ? cleanId : ('CHAY-' + cleanId));
     const tableName = order?.Table_number || order?.Table_name || 'Bàn Khách';
+    const customerName = order?.Customer_name || 'Khách vãng lai';
     const staffName = order?.Staff_name || order?.Paid_by || order?.Created_by || 'Thu Ngân';
     const createdDate = order?.Created_at || new Date().toLocaleString('vi-VN');
-    let totalAmount = Number(order?.Final_amount || order?.Total_amount || 0);
 
-    // Tính lại tổng tiền nếu totalAmount = 0 mà có items
-    if (items.length > 0) {
-        const sumItems = items.reduce((sum, it) => {
-            const price = Number(it.Unit_price || it.price || 0);
-            const qty = Number(it.Quantity || it.quantity || 1);
-            return sum + Number(it.Total_price || (price * qty));
-        }, 0);
-        if (totalAmount <= 0 || (sumItems > 0 && totalAmount < sumItems)) {
-            totalAmount = sumItems;
-        }
-    }
+    const fin = window.computeOrderFinancials({ ...(order || {}), items });
+    const fmt = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(Number(n || 0)));
 
     let itemsRows = '';
     if (items.length > 0) {
@@ -1368,77 +1513,83 @@ window.printOrderBill = async function(orderId) {
                         ${noteLine}
                     </td>
                     <td style="padding: 4px 0; text-align: center; vertical-align: top; font-weight: bold;">${qty}</td>
-                    <td style="padding: 4px 0; text-align: right; vertical-align: top;">${new Intl.NumberFormat('vi-VN').format(total)}</td>
+                    <td style="padding: 4px 0; text-align: right; vertical-align: top;">${fmt(total)}</td>
                 </tr>
             `;
         }).join('');
     } else {
-        itemsRows = `<tr><td colspan="3" style="text-align: center; padding: 6px 0;">Tổng cộng: ${new Intl.NumberFormat('vi-VN').format(totalAmount)} đ</td></tr>`;
+        itemsRows = `<tr><td colspan="3" style="text-align: center; padding: 6px 0;">Tổng cộng: ${fmt(fin.grossAmount)} đ</td></tr>`;
     }
 
     let loyaltyBreakdown = '';
-    if (order.Member_tier || order.Discount_amount || order.Points_amount || order.Prepaid_used) {
+    if (order?.Member_tier || fin.memberDiscount > 0 || fin.voucherDiscount > 0 || fin.pointsDiscount > 0) {
         let tName = '🌱 Mầm Sen';
-        if (order.Member_tier === 'BUP_SEN') tName = '🪷 Búp Sen';
-        else if (order.Member_tier === 'SEN_HONG') tName = '🌸 Sen Hồng';
-        else if (order.Member_tier === 'SEN_KIM_CUONG') tName = '💎 Sen Kim Cương';
+        if (order?.Member_tier === 'BUP_SEN') tName = '🪷 Búp Sen';
+        else if (order?.Member_tier === 'SEN_HONG') tName = '🌸 Sen Hồng';
+        else if (order?.Member_tier === 'SEN_KIM_CUONG') tName = '💎 Sen Kim Cương';
 
         loyaltyBreakdown = `
             <div style="font-size: 11px; margin-top: 4px; border-top: 1px dotted #888; padding-top: 4px;">
+                ${(order?.Member_tier || order?.Member_name) ? `
                 <div style="display: flex; justify-content: space-between;">
                     <span>Hội viên:</span>
                     <span><b>${order.Member_name || customerName}</b> (${tName})</span>
-                </div>
-                ${Number(order.Discount_amount || 0) > 0 ? `
-                <div style="display: flex; justify-content: space-between;">
-                    <span>Chiết khấu (-${order.Discount_percent}%):</span>
-                    <span>-${new Intl.NumberFormat('vi-VN').format(order.Discount_amount)} đ</span>
                 </div>` : ''}
-                ${Number(order.Points_amount || 0) > 0 ? `
+                ${fin.memberDiscount > 0 ? `
                 <div style="display: flex; justify-content: space-between;">
-                    <span>Dùng điểm (${order.Points_used} điểm):</span>
-                    <span>-${new Intl.NumberFormat('vi-VN').format(order.Points_amount)} đ</span>
+                    <span>Chiết khấu (-${order?.Discount_percent || 0}%):</span>
+                    <span>-${fmt(fin.memberDiscount)} đ</span>
                 </div>` : ''}
-                ${Number(order.Prepaid_used || 0) > 0 ? `
+                ${fin.voucherDiscount > 0 ? `
                 <div style="display: flex; justify-content: space-between;">
-                    <span>Ví Trả Trước:</span>
-                    <span>-${new Intl.NumberFormat('vi-VN').format(order.Prepaid_used)} đ</span>
+                    <span>Voucher (${order?.Voucher_code || 'Ưu đãi'}):</span>
+                    <span>-${fmt(fin.voucherDiscount)} đ</span>
+                </div>` : ''}
+                ${fin.pointsDiscount > 0 ? `
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Dùng điểm (${order?.Points_used || 0} điểm):</span>
+                    <span>-${fmt(fin.pointsDiscount)} đ</span>
                 </div>` : ''}
             </div>
-            ${Number(order.Points_earned || 0) > 0 ? `
-            <div style="font-size: 11px; margin-top: 3px; font-style: italic;">
-                + Điểm tích lũy đơn này: +${order.Points_earned} điểm
-            </div>` : ''}
         `;
     }
 
-    // Cấu hình thuế VAT
+    // Cấu hình thuế VAT (tính sau ưu đãi, trước khi trừ Ví trả trước)
     const vatEnabled = (sysConfig.vat_enabled === true || sysConfig.vat_enabled === '1' || sysConfig.vat_enabled === 'true');
     const vatRate = parseFloat(sysConfig.vat_rate || 8) || 8;
     const vatIncluded = (sysConfig.vat_included_in_price === true || sysConfig.vat_included_in_price === '1' || sysConfig.vat_included_in_price === 1 || sysConfig.vat_included_in_price === 'true');
 
     let vatRowHtml = '';
-    let finalPayable = totalAmount;
-    if (vatEnabled) {
-        if (vatIncluded) {
-            const vatAmt = Math.round(totalAmount - (totalAmount / (1 + vatRate / 100)));
-            vatRowHtml = `
-                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
-                    <span>Đã gồm VAT (${vatRate}%):</span>
-                    <span>${new Intl.NumberFormat('vi-VN').format(vatAmt)} đ</span>
-                </div>
-            `;
-        } else {
-            const vatAmt = Math.round(totalAmount * (vatRate / 100));
-            finalPayable = totalAmount + vatAmt;
-            vatRowHtml = `
-                <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
-                    <span>Thuế VAT (${vatRate}%):</span>
-                    <span>+${new Intl.NumberFormat('vi-VN').format(vatAmt)} đ</span>
-                </div>
-            `;
-        }
+    if (fin.vatExtra > 0) {
+        vatRowHtml = `
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
+                <span>Thuế VAT (${vatRate}% sau ưu đãi):</span>
+                <span>+${fmt(fin.vatExtra)} đ</span>
+            </div>
+        `;
+    } else if (vatEnabled && vatIncluded && fin.afterPromoAmount > 0) {
+        const vatAmt = Math.round(fin.afterPromoAmount - (fin.afterPromoAmount / (1 + vatRate / 100)));
+        vatRowHtml = `
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
+                <span>Đã gồm VAT (${vatRate}% sau ưu đãi):</span>
+                <span>${fmt(vatAmt)} đ</span>
+            </div>
+        `;
     }
+
+    const prepaidAndPointsHtml = `
+        ${fin.prepaidUsed > 0 ? `
+        <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-top: 2px;">
+            <span>Trừ Ví Trả Trước:</span>
+            <span>-${fmt(fin.prepaidUsed)} đ</span>
+        </div>` : ''}
+        ${Number(order?.Points_earned || 0) > 0 ? `
+        <div style="font-size: 11px; margin-top: 3px; font-style: italic;">
+            + Điểm tích lũy đơn này: +${order.Points_earned} điểm
+        </div>` : ''}
+    `;
+
+    const finalPayable = fin.actualCollected;
 
     // Xử lý mã QR Code
     let qrHtml = '';
@@ -1458,13 +1609,7 @@ window.printOrderBill = async function(orderId) {
         `;
     }
 
-    const win = window.open('', '_blank', 'width=450,height=650');
-    if (!win) {
-        if (window.toast) window.toast.warning('Trình duyệt đang chặn mở cửa sổ in. Vui lòng cho phép popup để in hóa đơn!');
-        else alert('Trình duyệt đang chặn mở cửa sổ in. Vui lòng cho phép popup để in hóa đơn!');
-        return;
-    }
-    win.document.write(`
+    const billHtml = `
         <!DOCTYPE html>
         <html>
             <head>
@@ -1517,11 +1662,16 @@ window.printOrderBill = async function(orderId) {
                 </table>
 
                 <div style="border-top: 1px solid #000; padding-top: 6px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12.5px;">
+                        <span>Tạm tính món:</span>
+                        <span>${fmt(fin.grossAmount)} đ</span>
+                    </div>
                     ${loyaltyBreakdown}
                     ${vatRowHtml}
+                    ${prepaidAndPointsHtml}
                     <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; margin-top: 4px; border-top: 1px dashed #000; padding-top: 4px;">
-                        <span>CẦN THANH TOÁN:</span>
-                        <span>${new Intl.NumberFormat('vi-VN').format(finalPayable)} đ</span>
+                        <span>THỰC THU:</span>
+                        <span>${fmt(finalPayable)} đ</span>
                     </div>
                 </div>
 
@@ -1530,17 +1680,49 @@ window.printOrderBill = async function(orderId) {
                 </div>
 
                 ${qrHtml}
-
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        setTimeout(function() { window.close(); }, 600);
-                    };
-                <\/script>
             </body>
         </html>
-    `);
-    win.document.close();
+    `;
+
+    const escposPayload = {
+        type: 'RECEIPT',
+        paperSize,
+        resName,
+        resAddr,
+        resPhone,
+        title: 'HOA DON THANH TOAN',
+        orderCode,
+        tableName,
+        staffName,
+        timeStr: createdDate,
+        items: items.map(it => ({
+            name: it.Item_name || it.name || 'Mon chay',
+            qty: Number(it.Quantity || it.quantity || 1),
+            price: Number(it.Unit_price ?? it.price ?? 0),
+            total: Number(it.Total_price ?? (Number(it.Quantity || it.quantity || 1) * Number(it.Unit_price ?? it.price ?? 0))),
+            toppings: it.Toppings || it.toppings || '',
+            note: it.Note || it.note || ''
+        })),
+        note: order?.Note || '',
+        totals: {
+            grossAmount: fin.grossAmount,
+            discountAmount: fin.totalPromoDiscount,
+            vatAmount: fin.vatExtra,
+            prepaidUsed: fin.prepaidUsed,
+            finalPayable
+        },
+        footer: billFooter
+    };
+
+    if (typeof window.printThermalHtml === 'function') {
+        await window.printThermalHtml(billHtml, {
+            paperWidth,
+            printerRole: 'RECEIPT',
+            escposPayload
+        });
+    } else {
+        window.print();
+    }
 };
 
 // 13. DỮ LIỆU DỰ PHÒNG
@@ -1769,7 +1951,8 @@ window.openQuickPaymentModal = async function(orderCode) {
         return;
     }
 
-    const finalTotal = Number(order.Final_amount || order.Total_amount || 0);
+    const fin = window.computeOrderFinancials(order);
+    const finalTotal = fin.actualCollected;
     const tableNumber = order.Table_number || order.Table_name || 'Bàn';
 
     const codeInput = document.getElementById('quickPayOrderCode');
@@ -1930,8 +2113,8 @@ window.handleQuickPayMethodChange = function(method) {
     }
 };
 
-// GỬI XÁC NHẬN THU TIỀN CHO BÀN
-window.submitQuickPayment = async function() {
+// GỬI XÁC NHẬN THU TIỀN CHO BÀN (HỖ TRỢ THANH TOÁN & IN)
+window.submitQuickPayment = async function(andPrint = false) {
     const orderCode = document.getElementById('quickPayOrderCode')?.value;
     if (!orderCode) return;
 
@@ -1942,9 +2125,11 @@ window.submitQuickPayment = async function() {
     const staffRole = user.Role || 'WAITER';
 
     const btn = document.getElementById('btnConfirmQuickPay');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Đang ghi nhận...';
+    const btnPrint = document.getElementById('btnConfirmAndPrintQuickPay');
+    if (btn) btn.disabled = true;
+    if (btnPrint) {
+        btnPrint.disabled = true;
+        btnPrint.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Đang xử lý & in...';
     }
 
     try {
@@ -1968,6 +2153,11 @@ window.submitQuickPayment = async function() {
             // Đóng Modal an toàn
             window.closeQuickPaymentModal();
 
+            // Nếu người dùng chọn "Thanh Toán & In" -> In hóa đơn trực tiếp
+            if (andPrint && typeof window.printOrderBill === 'function') {
+                await window.printOrderBill(orderCode);
+            }
+
             // Tải lại dữ liệu đơn hàng
             await window.loadOrders();
         } else {
@@ -1979,7 +2169,11 @@ window.submitQuickPayment = async function() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-check me-1"></i> Xác Nhận Đã Thu Tiền';
+            btn.innerHTML = '<i class="fa-solid fa-check me-1"></i> Chỉ Thu Tiền';
+        }
+        if (btnPrint) {
+            btnPrint.disabled = false;
+            btnPrint.innerHTML = '<i class="fa-solid fa-print me-1"></i> Thanh Toán & In';
         }
     }
 };
@@ -2040,8 +2234,8 @@ window.renderQuickCharts = function(filteredOrders) {
 
             if (!isCanceled && (isPaid || (!isServing && isCompleted))) {
                 const dateKey = String(o.Created_at || o.createdAt || '').substring(0, 10) || 'Hôm nay';
-                const amount = Number(o.Final_amount || o.Total_amount || 0);
-                revMap[dateKey] = (revMap[dateKey] || 0) + amount;
+                const fin = window.computeOrderFinancials(o);
+                revMap[dateKey] = (revMap[dateKey] || 0) + fin.actualCollected;
             }
         });
 

@@ -1414,18 +1414,12 @@ window.printTableBill = async function(tableId, tableName, orderCode) {
         const amount = table ? Number(table.Current_amount || 0) : 0;
         const now = new Date().toLocaleString('vi-VN');
 
-        const printWin = window.open('', '_blank', 'width=380,height=600');
-        if (!printWin) {
-            if (window.toast) window.toast.warning('Trình duyệt đang chặn cửa sổ in (popup). Vui lòng cho phép mở popup!');
-            return;
-        }
-
-        printWin.document.write(`
+        const htmlContent = `
             <html>
             <head>
                 <title>Hóa Đơn - ${tableName}</title>
                 <style>
-                    body { font-family: 'Courier New', monospace; font-size: 13px; margin: 0; padding: 15px; color: #000; width: 300px; }
+                    body { font-family: 'Courier New', monospace; font-size: 13px; margin: 0; padding: 15px; color: #000; }
                     .center { text-align: center; }
                     .line { border-bottom: 1px dashed #000; margin: 8px 0; }
                     .row { display: flex; justify-content: space-between; margin: 4px 0; }
@@ -1433,7 +1427,7 @@ window.printTableBill = async function(tableId, tableName, orderCode) {
                     .total { font-size: 16px; font-weight: bold; }
                 </style>
             </head>
-            <body onload="window.print(); window.close();">
+            <body>
                 <div class="center bold" style="font-size: 15px;">${resName}</div>
                 <div class="center" style="font-size: 11px;">${resAddr}</div>
                 <div class="center" style="font-size: 11px;">Hotline: ${resPhone}</div>
@@ -1449,8 +1443,30 @@ window.printTableBill = async function(tableId, tableName, orderCode) {
                 <div class="center" style="font-size: 11px; white-space: pre-line; margin-top: 10px;">${billFooter}</div>
             </body>
             </html>
-        `);
-        printWin.document.close();
+        `;
+
+        if (typeof window.printThermalHtml === 'function') {
+            await window.printThermalHtml(htmlContent, {
+                paperWidth: (sysConfig.paperSize === '58mm') ? '58mm' : '80mm',
+                printerRole: 'RECEIPT',
+                escposPayload: {
+                    type: 'RECEIPT',
+                    paperSize: sysConfig.paperSize || '80mm',
+                    resName,
+                    resAddr,
+                    resPhone,
+                    title: 'PHIEU THANH TOAN',
+                    orderCode: orderCode || 'BAN',
+                    tableName,
+                    timeStr: now,
+                    items: [{ name: 'Tong hop don ban ' + tableName, qty: 1, price: amount, total: amount }],
+                    totals: { grossAmount: amount, finalPayable: amount },
+                    footer: billFooter
+                }
+            });
+        } else {
+            window.print();
+        }
     } catch (e) {
         console.error('Lỗi in hóa đơn:', e);
     }
@@ -1648,18 +1664,12 @@ window.printPreBillFromModal = function() {
         itemsRows = `<tr><td colspan="4" style="text-align: center; padding: 10px;">Tổng tiền tạm tính: ${amount.toLocaleString('vi-VN')} đ</td></tr>`;
     }
 
-    const printWin = window.open('', '_blank', 'width=380,height=600');
-    if (!printWin) {
-        if (window.toast) window.toast.warning('Trình duyệt chặn mở popup in. Vui lòng cho phép mở popup!');
-        return;
-    }
-
-    printWin.document.write(`
+    const preBillHtml = `
         <html>
         <head>
             <title>Phiếu Tạm Tính - ${tableName}</title>
             <style>
-                body { font-family: 'Courier New', monospace; font-size: 13px; margin: 0; padding: 12px; color: #000; width: 300px; }
+                body { font-family: 'Courier New', monospace; font-size: 13px; margin: 0; padding: 12px; color: #000; }
                 .center { text-align: center; }
                 .line { border-bottom: 1px dashed #000; margin: 8px 0; }
                 .row { display: flex; justify-content: space-between; margin: 3px 0; }
@@ -1669,7 +1679,7 @@ window.printPreBillFromModal = function() {
                 .total { font-size: 16px; font-weight: bold; }
             </style>
         </head>
-        <body onload="window.print(); window.close();">
+        <body>
             <div class="center bold" style="font-size: 15px;">${resName}</div>
             <div class="center" style="font-size: 11px;">${resAddr}</div>
             <div class="center" style="font-size: 11px;">Hotline: ${resPhone}</div>
@@ -1699,8 +1709,36 @@ window.printPreBillFromModal = function() {
             <div class="center" style="font-size: 10px; font-style: italic; margin-top: 4px;">(Phiếu này chưa phải là hóa đơn thanh toán)</div>
         </body>
         </html>
-    `);
-    printWin.document.close();
+    `;
+
+    if (typeof window.printThermalHtml === 'function') {
+        window.printThermalHtml(preBillHtml, {
+            paperWidth: (sysConfig.paperSize === '58mm') ? '58mm' : '80mm',
+            printerRole: 'RECEIPT',
+            escposPayload: {
+                type: 'RECEIPT',
+                paperSize: sysConfig.paperSize || '80mm',
+                resName,
+                resAddr,
+                resPhone,
+                title: 'PHIEU TAM TINH',
+                orderCode: orderCode || 'TAM-TINH',
+                tableName,
+                timeStr: now,
+                items: items.map(it => ({
+                    name: it.Item_name || it.name || 'Mon chay',
+                    qty: Number(it.Quantity || it.quantity || 1),
+                    price: Number(it.Unit_price || it.price || 0),
+                    total: Number(it.Total_price || (Number(it.Quantity || it.quantity || 1) * Number(it.Unit_price || it.price || 0))),
+                    note: it.Note || it.note || ''
+                })),
+                totals: { grossAmount: amount, finalPayable: amount },
+                footer: billFooter
+            }
+        });
+    } else {
+        window.print();
+    }
 };
 
 // 12. Thống Kê Lượng Khách Theo Thời Gian (Guest Analytics & Chart.js)

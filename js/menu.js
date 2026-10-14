@@ -230,7 +230,7 @@ function setupMenuFormSubmit() {
                 notify(data.error || 'Không thể lưu dữ liệu!', 'error');
             } else {
                 notify(isEdit ? 'Cập nhật món thành công!' : 'Thêm món mới thành công!', 'success');
-                cancelEditMode();
+                window.cancelMenuEditMode();
                 loadMenuItemsTable();
             }
         } catch (err) {
@@ -284,7 +284,7 @@ window.editMenuItem = async function(id) {
 };
 
 // Hàm Hủy chế độ Sửa
-window.cancelEditMode = function() {
+window.cancelMenuEditMode = function() {
     const form = document.getElementById('addMenuForm');
     if (form) form.reset();
 

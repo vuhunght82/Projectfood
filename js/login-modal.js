@@ -298,14 +298,33 @@ async function handleLogin(event, isForced = false) {
         }
     }
 
-    // Lấy tọa độ GPS nếu thiết bị hỗ trợ
+    // Nút submit & trạng thái xử lý
+    const submitBtn = document.getElementById('loginSubmitBtn') || document.querySelector('#loginForm button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i> Đang đăng nhập...';
+    }
+
+    // Lấy tọa độ GPS nếu thiết bị hỗ trợ (Đảm bảo timeout nhanh không treo WebView Android)
     let latitude = null;
     let longitude = null;
-    if (navigator.geolocation) {
+    if (navigator.geolocation && navigator.geolocation.getCurrentPosition) {
         try {
-            const pos = await new Promise((resolve) => {
-                navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { timeout: 3500, enableHighAccuracy: true });
-            });
+            const pos = await Promise.race([
+                new Promise((resolve) => {
+                    try {
+                        navigator.geolocation.getCurrentPosition(
+                            resolve,
+                            () => resolve(null),
+                            { timeout: 1200, maximumAge: 60000, enableHighAccuracy: false }
+                        );
+                    } catch (e) {
+                        resolve(null);
+                    }
+                }),
+                new Promise((resolve) => setTimeout(() => resolve(null), 1300))
+            ]);
             if (pos && pos.coords) {
                 latitude = pos.coords.latitude;
                 longitude = pos.coords.longitude;
@@ -436,6 +455,11 @@ async function handleLogin(event, isForced = false) {
         console.error('Lỗi kết nối API đăng nhập:', error);
         if (window.toast) window.toast.error('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại đường truyền mạng!');
         else alert('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại đường truyền mạng!');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml;
+        }
     }
 }
 window.handleLogin = handleLogin;
@@ -683,20 +707,32 @@ window.canViewAllOrders = canViewAllOrders;
 function checkAuthStatus() {
     const user = currentUser || window.currentUser;
     const authContainer = document.getElementById('authNavArea');
+    const mobileMenuToggleBtn = document.getElementById('mobileMenuToggleBtn');
+    const mobileNavUserName = document.getElementById('mobileNavUserName');
+    const mobileNavUserRole = document.getElementById('mobileNavUserRole');
 
     if (authContainer) {
         if (user) {
+            const displayName = user.Full_name || user.User_name || 'Nhân viên';
+            const roleTitle = getRoleTitle(user.Role);
             authContainer.innerHTML = `
-                <button id="btnHeaderWakeLock" class="btn btn-sm btn-outline-light rounded-pill px-2 py-1 me-2" onclick="window.toggleScreenWakeLockQuick()" title="Bật/Tắt giữ màn hình luôn sáng liên tục (không tự tắt/khóa máy)">
-                    <i class="fa-regular fa-sun" id="headerWakeLockIcon"></i> <span class="d-none d-md-inline" id="headerWakeLockText">Sáng liên tục: TẮT</span>
+                <button id="btnHeaderWakeLock" class="btn btn-sm btn-outline-light rounded-pill px-2 py-1 me-1 me-md-2" onclick="window.toggleScreenWakeLockQuick()" title="Bật/Tắt giữ màn hình luôn sáng liên tục (không tự tắt/khóa máy)">
+                    <i class="fa-regular fa-sun" id="headerWakeLockIcon"></i> <span class="d-none d-xl-inline" id="headerWakeLockText">Sáng liên tục: TẮT</span>
                 </button>
-                <span style="color: white; font-weight: 600; margin-right: 10px;">
-                    <i class="fa-solid fa-circle-user"></i> ${user.Full_name || user.User_name} (${getRoleTitle(user.Role)})
+                <span class="header-user-info" style="cursor: pointer;" onclick="window.openSelfProfileModal('info')" title="Bấm để xem & cập nhật hồ sơ cá nhân: ${displayName} (${roleTitle})">
+                    <i class="fa-solid fa-circle-user"></i>
+                    <span class="header-user-name">${displayName}</span>
+                    <span class="header-user-role">(${roleTitle})</span>
                 </span>
-                <button class="btn btn-outline-light" style="padding: 4px 10px; font-size: 12px;" onclick="handleLogout()">
-                    <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+                <button class="btn btn-warning text-dark fw-bold rounded-pill" style="padding: 4px 10px; font-size: 12px;" onclick="window.openSelfProfileModal('password')" title="Tự thay đổi mật khẩu cá nhân">
+                    <i class="fa-solid fa-key"></i> <span class="d-none d-sm-inline">Đổi MK</span>
+                </button>
+                <button class="btn btn-outline-light header-logout-btn" style="padding: 4px 10px; font-size: 12px;" onclick="handleLogout()" title="Đăng xuất">
+                    <i class="fa-solid fa-right-from-bracket"></i> <span class="header-logout-text">Đăng xuất</span>
                 </button>
             `;
+            if (mobileNavUserName) mobileNavUserName.innerText = displayName;
+            if (mobileNavUserRole) mobileNavUserRole.innerHTML = `${roleTitle} • <span class="text-light text-decoration-underline">Đổi MK</span>`;
             if (typeof window.updateWakeLockUI === 'function') {
                 window.updateWakeLockUI(localStorage.getItem('hoasen_keep_screen_awake') === '1');
             }
@@ -739,13 +775,21 @@ function checkAuthStatus() {
         tabReadyOrders.style.display = 'none';
     }
     if (tabUsers) tabUsers.style.display = 'none';
-    if (tabAdminSystem) tabAdminSystem.classList.add('d-none');
-    if (tabKitchen) tabKitchen.classList.add('d-none');
+    if (tabAdminSystem) {
+        tabAdminSystem.classList.add('d-none');
+        tabAdminSystem.style.display = 'none';
+    }
+    if (tabKitchen) {
+        tabKitchen.classList.add('d-none');
+        tabKitchen.style.display = 'none';
+    }
     if (floatingCartBtn) floatingCartBtn.style.display = 'none';
 
-    // Nếu chưa đăng nhập: Ẩn thanh tab bar và toàn bộ các nút nổi (Giỏ hàng, Shipper...)
+    // Nếu chưa đăng nhập: Ẩn thanh tab bar, nút hamburger menu và toàn bộ các nút nổi (Giỏ hàng, Shipper...)
     if (!user) {
         if (navTabsBar) navTabsBar.classList.add('d-none');
+        if (mobileMenuToggleBtn) mobileMenuToggleBtn.classList.add('d-none');
+        if (typeof window.closeMobileNavMenu === 'function') window.closeMobileNavMenu();
         if (floatingButtonsContainer) floatingButtonsContainer.style.display = 'none';
         return;
     }
@@ -755,6 +799,7 @@ function checkAuthStatus() {
     if (isCustomer) {
         // Khách hàng: Tuyệt đối KHÔNG hiển thị các tab nhân viên VÀ KHÔNG hiển thị giỏ hàng, menu món ăn
         if (navTabsBar) navTabsBar.classList.remove('d-none');
+        if (mobileMenuToggleBtn) mobileMenuToggleBtn.classList.remove('d-none');
         if (tabGuestHome) {
             tabGuestHome.style.display = 'inline-flex';
             tabGuestHome.innerHTML = '<i class="fa-solid fa-id-card me-1"></i> Thẻ & Đơn Hàng Của Tôi';
@@ -772,9 +817,12 @@ function checkAuthStatus() {
 
     if (perms.length > 0) {
         if (navTabsBar) navTabsBar.classList.remove('d-none');
+        if (mobileMenuToggleBtn) mobileMenuToggleBtn.classList.remove('d-none');
     } else {
         // Tài khoản không có bất kỳ quyền nào
         if (navTabsBar) navTabsBar.classList.add('d-none');
+        if (mobileMenuToggleBtn) mobileMenuToggleBtn.classList.add('d-none');
+        if (typeof window.closeMobileNavMenu === 'function') window.closeMobileNavMenu();
     }
 
     // 🌟 PHÂN QUYỀN CỤM NÚT NỔI SHIPPER & GIỎ HÀNG
@@ -826,12 +874,12 @@ function checkAuthStatus() {
         tabTables.style.display = 'inline-flex';
     }
 
-    // Tab Đơn Hàng
+    // Tab Đơn Hàng & Nhật Ký
     if (perms.includes('ORDERS_PERSONAL') || perms.includes('ORDERS_LIST') || perms.includes('ORDERS_ALL')) {
         if (tabOrders) {
             tabOrders.style.display = 'inline-flex';
             if (perms.includes('ORDERS_ALL')) {
-                tabOrders.innerHTML = '<i class="fa-solid fa-receipt me-1"></i> Đơn Hàng & Đặt Món';
+                tabOrders.innerHTML = '<i class="fa-solid fa-receipt me-1"></i> Đơn Hàng & Nhật Ký';
             } else {
                 tabOrders.innerHTML = '<i class="fa-solid fa-clipboard-user me-1 text-warning"></i> Đơn Hàng & Nhật Ký Cá Nhân';
             }
@@ -874,6 +922,7 @@ function checkAuthStatus() {
     // Tab Quản Lý Hệ Thống
     if (perms.includes('SYSTEM_CONFIG') && tabAdminSystem) {
         tabAdminSystem.classList.remove('d-none');
+        tabAdminSystem.style.display = 'inline-flex';
     }
 }
 window.checkAuthStatus = checkAuthStatus;
@@ -882,18 +931,25 @@ window.checkAuthStatus = checkAuthStatus;
 function redirectUserByRole(role) {
     const user = currentUser || window.currentUser;
     const perms = getUserPermissions(user);
-    const roleUpper = String(role).toUpperCase();
+    const roleUpper = String(role || '').toUpperCase().trim();
+    const username = String(user?.User_name || user?.username || '').toLowerCase().trim();
 
     if (['CUSTOMER', 'KHÁCH HÀNG', 'KHACHHANG'].includes(roleUpper)) {
         navigateTo('/');
         return;
     }
 
-    // Điều hướng theo quyền hạn cao nhất được cấp
-    if (['ADMIN', 'QUẢN LÝ', 'QUANLY'].includes(roleUpper) && perms.includes('SYSTEM_CONFIG')) {
-        navigateTo('/system-settings');
-    } else if (['KITCHEN', 'BẾP', 'BEP'].includes(roleUpper) && perms.includes('KITCHEN')) {
+    // Khi đăng nhập dạng Quản Lý (ADMIN / QUẢN LÝ / MANAGER): Tự động vào trang Đơn Hàng & Nhật Ký (/orders), không mở vào Quản Lý Hệ Thống
+    if (['ADMIN', 'QUẢN LÝ', 'QUANLY', 'MANAGER'].includes(roleUpper) || username === 'admin' || username === 'vu') {
+        navigateTo('/orders');
+        return;
+    }
+
+    // Điều hướng theo quyền hạn cho các vai trò khác
+    if (['KITCHEN', 'BẾP', 'BEP'].includes(roleUpper) && perms.includes('KITCHEN')) {
         navigateTo('/kitchen');
+    } else if (perms.includes('ORDERS_ALL') && ['CASHIER', 'THU NGÂN', 'THUNGAN'].includes(roleUpper)) {
+        navigateTo('/orders');
     } else if (perms.includes('TABLES_VIEW')) {
         navigateTo('/tables');
     } else if (perms.includes('ORDERS_PERSONAL') || perms.includes('ORDERS_LIST') || perms.includes('ORDERS_ALL')) {
@@ -926,3 +982,211 @@ function getRoleTitle(role) {
     };
     return rolesMap[role] || role || 'Khách';
 }
+
+// ==========================================
+// 6. TÍNH NĂNG NHÂN VIÊN TỰ ĐỔI MẬT KHẨU & CẬP NHẬT HỒ SƠ CÁ NHÂN
+// ==========================================
+window.openSelfProfileModal = async function(defaultTab = 'password') {
+    const user = currentUser || window.currentUser || JSON.parse(localStorage.getItem('restaurant_user') || 'null');
+    if (!user || !user.User_id) {
+        if (window.toast) window.toast.warning('Vui lòng đăng nhập để sử dụng tính năng này!');
+        return;
+    }
+
+    // Nạp thông tin mới nhất từ Server
+    let latestUser = user;
+    try {
+        const res = await fetch(`/api/users/${user.User_id}?t=${Date.now()}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.user) {
+                latestUser = { ...user, ...data.user };
+                currentUser = latestUser;
+                window.currentUser = latestUser;
+                localStorage.setItem('restaurant_user', JSON.stringify(latestUser));
+            }
+        }
+    } catch (e) {}
+
+    const headerSub = document.getElementById('selfProfileHeaderSub');
+    if (headerSub) {
+        headerSub.innerText = `${latestUser.Full_name || latestUser.User_name} (@${latestUser.User_name}) • Vai trò: ${getRoleTitle(latestUser.Role)}`;
+    }
+
+    // Reset form mật khẩu
+    if (document.getElementById('selfCurPassword')) document.getElementById('selfCurPassword').value = '';
+    if (document.getElementById('selfNewPassword')) document.getElementById('selfNewPassword').value = '';
+    if (document.getElementById('selfConfirmPassword')) document.getElementById('selfConfirmPassword').value = '';
+
+    // Điền form thông tin cá nhân
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val || '';
+    };
+    setVal('selfFullName', latestUser.Full_name || latestUser.User_name || '');
+    setVal('selfGender', latestUser.Gender || 'Khác');
+    setVal('selfBirthday', latestUser.Birthday || '');
+    setVal('selfPhone', latestUser.Phone || '');
+    setVal('selfEmail', latestUser.Email || '');
+    setVal('selfCitizenId', latestUser.Citizen_id || '');
+    setVal('selfAddress', latestUser.Address || '');
+    setVal('selfEmergencyContact', latestUser.Emergency_contact || '');
+
+    const createdEl = document.getElementById('selfCreatedAtText');
+    const updatedEl = document.getElementById('selfUpdatedAtText');
+    if (createdEl) createdEl.innerText = latestUser.Created_at || '---';
+    if (updatedEl) updatedEl.innerText = latestUser.Updated_at || latestUser.Created_at || '---';
+
+    window.switchSelfProfileTab(defaultTab);
+
+    const modalEl = document.getElementById('selfProfileModal');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+};
+
+window.switchSelfProfileTab = function(tab) {
+    const pwdPane = document.getElementById('selfTabPasswordPane');
+    const infoPane = document.getElementById('selfTabInfoPane');
+    const btnPwd = document.getElementById('btnSelfTabPassword');
+    const btnInfo = document.getElementById('btnSelfTabInfo');
+
+    if (tab === 'info') {
+        pwdPane?.classList.add('d-none');
+        infoPane?.classList.remove('d-none');
+        if (btnPwd) btnPwd.className = 'btn btn-sm btn-outline-success fw-bold px-3 rounded-pill';
+        if (btnInfo) btnInfo.className = 'btn btn-sm btn-success fw-bold px-3 rounded-pill';
+    } else {
+        infoPane?.classList.add('d-none');
+        pwdPane?.classList.remove('d-none');
+        if (btnPwd) btnPwd.className = 'btn btn-sm btn-success fw-bold px-3 rounded-pill';
+        if (btnInfo) btnInfo.className = 'btn btn-sm btn-outline-success fw-bold px-3 rounded-pill';
+    }
+};
+
+window.toggleInputEye = function(inputId, btnEl) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const icon = btnEl?.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) {
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        }
+    } else {
+        input.type = 'password';
+        if (icon) {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+};
+
+window.submitSelfChangePassword = async function(event) {
+    if (event) event.preventDefault();
+    const user = currentUser || window.currentUser;
+    if (!user || !user.User_id) return;
+
+    const currentPassword = (document.getElementById('selfCurPassword')?.value || '').trim();
+    const newPassword = (document.getElementById('selfNewPassword')?.value || '').trim();
+    const confirmPassword = (document.getElementById('selfConfirmPassword')?.value || '').trim();
+
+    if (!currentPassword || !newPassword) {
+        if (window.toast) window.toast.warning('Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới!');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        if (window.toast) window.toast.error('Mật khẩu mới và xác nhận mật khẩu không khớp!');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/users/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                User_id: user.User_id,
+                User_name: user.User_name,
+                currentPassword,
+                newPassword,
+                adminOverride: false
+            })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (window.toast) window.toast.success('🎉 Đã thay đổi mật khẩu thành công!');
+
+            // Nếu có lưu ghi nhớ đăng nhập thì cập nhật lại mật khẩu mới
+            try {
+                const remembered = JSON.parse(localStorage.getItem('hoasen_remember_login') || 'null');
+                if (remembered && String(remembered.username).toLowerCase() === String(user.User_name).toLowerCase()) {
+                    localStorage.setItem('hoasen_remember_login', JSON.stringify({ username: remembered.username, password: newPassword }));
+                }
+            } catch (e) {}
+
+            // Đóng modal
+            const modalEl = document.getElementById('selfProfileModal');
+            if (modalEl && typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getInstance(modalEl)?.hide();
+            }
+
+            if (typeof window.loadUsers === 'function' && window.location.pathname === '/users') {
+                window.loadUsers();
+            }
+        } else {
+            if (window.toast) window.toast.error(data.error || 'Không thể đổi mật khẩu!');
+        }
+    } catch (err) {
+        if (window.toast) window.toast.error('Lỗi kết nối máy chủ khi đổi mật khẩu!');
+    }
+};
+
+window.submitSelfProfileInfo = async function(event) {
+    if (event) event.preventDefault();
+    const user = currentUser || window.currentUser;
+    if (!user || !user.User_id) return;
+
+    const payload = {
+        Full_name: (document.getElementById('selfFullName')?.value || '').trim(),
+        Gender: document.getElementById('selfGender')?.value || 'Khác',
+        Birthday: document.getElementById('selfBirthday')?.value || '',
+        Phone: (document.getElementById('selfPhone')?.value || '').trim(),
+        Email: (document.getElementById('selfEmail')?.value || '').trim(),
+        Citizen_id: (document.getElementById('selfCitizenId')?.value || '').trim(),
+        Address: (document.getElementById('selfAddress')?.value || '').trim(),
+        Emergency_contact: (document.getElementById('selfEmergencyContact')?.value || '').trim()
+    };
+
+    try {
+        const res = await fetch(`/api/users/self-profile/${user.User_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (window.toast) window.toast.success('Đã cập nhật thông tin cá nhân thành công!');
+            if (data.user) {
+                currentUser = { ...user, ...data.user };
+                window.currentUser = currentUser;
+                localStorage.setItem('restaurant_user', JSON.stringify(currentUser));
+                checkAuthStatus();
+            }
+            const modalEl = document.getElementById('selfProfileModal');
+            if (modalEl && typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getInstance(modalEl)?.hide();
+            }
+            if (typeof window.loadUsers === 'function' && window.location.pathname === '/users') {
+                window.loadUsers();
+            }
+        } else {
+            if (window.toast) window.toast.error(data.error || 'Không thể cập nhật thông tin cá nhân!');
+        }
+    } catch (err) {
+        if (window.toast) window.toast.error('Lỗi kết nối máy chủ!');
+    }
+};

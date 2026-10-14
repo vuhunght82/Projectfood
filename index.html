@@ -13,11 +13,11 @@
     
     <!-- CSS Bootstrap 5 & Custom CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20261007_13">
-    <link rel="stylesheet" href="css/menu-cards.css?v=20261007_13">
-    <link rel="stylesheet" href="css/mobile.css?v=20261007_13">
-    <link rel="stylesheet" href="css/ready-tv.css?v=20261007_13">
-    <link rel="stylesheet" href="css/guest-home.css?v=20261007_13">
+    <link rel="stylesheet" href="style.css?v=20261013_01">
+    <link rel="stylesheet" href="css/menu-cards.css?v=20261013_01">
+    <link rel="stylesheet" href="css/mobile.css?v=20261013_01">
+    <link rel="stylesheet" href="css/ready-tv.css?v=20261013_01">
+    <link rel="stylesheet" href="css/guest-home.css?v=20261013_01">
 
     <!-- Style dành riêng cho kitchen-mode -->
     <style>
@@ -85,11 +85,19 @@
 <body>
 
     <header id="mainHeaderBar">
-        <h1 id="headerBrandTitle" style="display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none;" onclick="navigateTo('/')" title="Về Trang Chủ">
-            <img id="headerBrandLogoImg" src="" alt="Logo" style="display: none; width: 34px; height: 34px; object-fit: contain; border-radius: 50%; background: white; padding: 2px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer;">
-            <i id="headerBrandLeafIcon" class="fa-solid fa-leaf" style="cursor: pointer;"></i>
-            <span id="headerBrandNameText" style="cursor: pointer;">Nhà Hàng Chay Hoa Sen</span>
-        </h1>
+        <div class="header-left-group">
+            <!-- NÚT 3 GẠCH (HAMBURGER) GÓC TRÊN BÊN TRÁI ĐỂ ĐỔ MENU DỌC XUỐNG TRÊN ĐIỆN THOẠI & TABLET -->
+            <button type="button" id="mobileMenuToggleBtn" class="mobile-menu-toggle-btn d-none" onclick="window.toggleMobileNavMenu(event)" title="Mở Menu Điều Hướng" aria-label="Menu điều hướng">
+                <i class="fa-solid fa-bars" id="mobileMenuToggleIcon"></i>
+                <span id="mobileMenuTotalBadge" class="mobile-menu-badge" style="display: none;">0</span>
+            </button>
+
+            <h1 id="headerBrandTitle" style="display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none;" onclick="navigateTo('/')" title="Về Trang Chủ">
+                <img id="headerBrandLogoImg" src="" alt="Logo" style="display: none; width: 34px; height: 34px; object-fit: contain; border-radius: 50%; background: white; padding: 2px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer;">
+                <i id="headerBrandLeafIcon" class="fa-solid fa-leaf" style="cursor: pointer;"></i>
+                <span id="headerBrandNameText" style="cursor: pointer;">Nhà Hàng Chay Hoa Sen</span>
+            </h1>
+        </div>
         
         <!-- KHU VỰC NÚT ĐĂNG NHẬP / THÔNG TIN USER -->
         <div id="authNavArea">
@@ -98,6 +106,9 @@
             </button>
         </div>
     </header>
+
+    <!-- LỚP PHỦ MỜ KHI MỞ MENU DỌC TRÊN ĐIỆN THOẠI / TABLET -->
+    <div id="mobileNavBackdrop" class="mobile-nav-backdrop" onclick="window.closeMobileNavMenu()"></div>
 
     <!-- KHU VỰC CÁC NÚT ICON NỔI PHÍA DƯỚI (CHỈ DÀNH CHO NHÂN VIÊN ĐÃ ĐĂNG NHẬP) -->
     <div id="floatingButtonsContainer" class="floating-buttons-container layout-vertical" style="display: none;">
@@ -111,8 +122,24 @@
         <div id="dynamicFloatingButtonsList" style="display: none;"></div>
     </div>
 
-    <!-- THANH ĐIỀU HƯỚNG TABS -->
-    <div class="nav-tabs">
+    <!-- THANH ĐIỀU HƯỚNG TABS (Ngang trên PC, Dọc đổ xuống từ góc trên bên trái trên Điện thoại/Tablet) -->
+    <div class="nav-tabs" id="mainNavTabs">
+        <!-- Header thông tin nhân viên chỉ hiện trong menu dọc trên Mobile/Tablet -->
+        <div class="mobile-nav-user-header" id="mobileNavUserHeader">
+            <div class="d-flex align-items-center gap-2 overflow-hidden" style="cursor: pointer;" onclick="window.closeMobileNavMenu(); window.openSelfProfileModal('password');" title="Bấm để xem hồ sơ cá nhân & đổi mật khẩu">
+                <div class="mobile-nav-avatar">
+                    <i class="fa-solid fa-circle-user"></i>
+                </div>
+                <div class="overflow-hidden">
+                    <div class="fw-bold text-white text-truncate" id="mobileNavUserName" style="font-size: 13.5px;">Nhân viên</div>
+                    <div class="text-warning fw-semibold" id="mobileNavUserRole" style="font-size: 11px;">Hệ thống POS • <span class="text-light text-decoration-underline">Đổi MK</span></div>
+                </div>
+            </div>
+            <button type="button" class="mobile-nav-close-btn" onclick="window.closeMobileNavMenu()" title="Đóng menu">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
         <!-- TAB TRANG CHỦ DÀNH CHO KHÁCH HÀNG -->
         <button class="tab-btn text-success fw-bold" id="guestHomeTab" data-route="/" onclick="navigateTo('/')" style="display: none;">
             <i class="fa-solid fa-house me-1"></i> Trang Chủ
@@ -122,7 +149,7 @@
             <i class="fa-solid fa-table-cells me-1"></i> Phòng Bàn
         </button>
         <button class="tab-btn" data-route="/orders" onclick="navigateTo('/orders')">
-            <i class="fa-solid fa-receipt"></i> Đơn Hàng & Đặt Món
+            <i class="fa-solid fa-receipt"></i> Đơn Hàng & Nhật Ký
         </button>
         <button class="tab-btn" data-route="/categories" onclick="navigateTo('/categories')">
             <i class="fa-solid fa-list-check"></i> Danh Mục
@@ -141,7 +168,7 @@
             <i class="fa-solid fa-id-card me-1"></i> Hội Viên & Thẻ
         </button>
         <!-- TAB NHẬN MÓN (BẾP XONG): Cho khách, thu ngân, bồi bàn theo dõi món xong -->
-        <button class="tab-btn text-success fw-bold d-inline-flex align-items-center" id="readyOrdersTab" data-route="/ready-orders" onclick="navigateTo('/ready-orders')">
+        <button class="tab-btn text-success fw-bold align-items-center" id="readyOrdersTab" data-route="/ready-orders" onclick="navigateTo('/ready-orders')">
             <i class="fa-solid fa-bell-concierge me-1"></i> Nhận Món (Bếp Xong)
             <span id="navReadyOrdersBadge" class="nav-counter-badge" style="display: none;">0</span>
         </button>
@@ -170,10 +197,10 @@
 
     <!-- MODAL ĐĂNG NHẬP HOÀNG GIA CHAY HOA SEN (NỀN XANH VIỀN VÀNG ĐẬM CHUẨN MẪU) -->
     <div id="loginModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:99999; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;">
-        <div class="login-royal-card shadow-lg" style="background: radial-gradient(130% 130% at 50% 15%, #0e3d1c 0%, #06230f 65%, #031508 100%) !important; border: 2.5px solid #eab308 !important; border-radius: 28px !important; box-shadow: 0 25px 60px rgba(0,0,0,0.85), 0 0 35px rgba(234,179,8,0.3) !important; padding: 28px 24px !important; width: 100% !important; max-width: 410px !important; position: relative !important; color: #ffffff !important; overflow: hidden !important; box-sizing: border-box !important;">
+        <div class="login-royal-card shadow-lg" style="background: radial-gradient(130% 130% at 50% 15%, #0e3d1c 0%, #06230f 65%, #031508 100%) !important; border: 2.5px solid #eab308 !important; border-radius: 28px !important; box-shadow: 0 25px 60px rgba(0,0,0,0.85), 0 0 35px rgba(234,179,8,0.3) !important; padding: 28px 24px !important; width: 100% !important; max-width: 410px !important; position: relative !important; color: #ffffff !important; overflow: hidden !important; box-sizing: border-box !important; pointer-events: auto !important;">
             
             <!-- Nút đóng tròn viền vàng góc trên bên phải -->
-            <button type="button" onclick="closeModal('loginModal')" title="Đóng" style="position: absolute !important; top: 16px !important; right: 16px !important; width: 34px !important; height: 34px !important; border-radius: 50% !important; border: 1.5px solid #d4af37 !important; background: rgba(0,0,0,0.3) !important; color: #ffd700 !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important; font-size: 15px !important; padding: 0 !important; z-index: 10 !important; transition: transform 0.2s, background 0.2s;">
+            <button type="button" onclick="closeModal('loginModal')" title="Đóng" style="position: absolute !important; top: 16px !important; right: 16px !important; width: 34px !important; height: 34px !important; border-radius: 50% !important; border: 1.5px solid #d4af37 !important; background: rgba(0,0,0,0.3) !important; color: #ffd700 !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important; font-size: 15px !important; padding: 0 !important; z-index: 10 !important; transition: transform 0.2s, background 0.2s; pointer-events: auto !important; touch-action: manipulation;">
                 <i class="fa-solid fa-xmark"></i>
             </button>
 
@@ -233,7 +260,7 @@
                 </div>
 
                 <!-- Nút Đăng Nhập Vàng Cam Sang Trọng -->
-                <button type="submit" style="background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%) !important; color: #1c1100 !important; border: none !important; border-radius: 16px !important; font-size: 15.5px !important; font-weight: 800 !important; letter-spacing: 0.5px !important; box-shadow: 0 8px 24px rgba(217, 119, 6, 0.45) !important; cursor: pointer !important; width: 100% !important; padding: 12px 16px !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; transition: transform 0.2s, box-shadow 0.2s !important;">
+                <button type="submit" id="loginSubmitBtn" style="background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%) !important; color: #1c1100 !important; border: none !important; border-radius: 16px !important; font-size: 15.5px !important; font-weight: 800 !important; letter-spacing: 0.5px !important; box-shadow: 0 8px 24px rgba(217, 119, 6, 0.45) !important; cursor: pointer !important; width: 100% !important; padding: 12px 16px !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; transition: transform 0.2s, box-shadow 0.2s !important; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
                     <i class="fa-solid fa-right-to-bracket fs-6"></i> ĐĂNG NHẬP HỆ THỐNG
                 </button>
             </form>
@@ -843,6 +870,148 @@
         </div>
     </div>
 
+    <!-- MODAL TỰ ĐỔI MẬT KHẨU & CẬP NHẬT HỒ SƠ CÁ NHÂN (DÀNH CHO MỌI NHÂN VIÊN / NGƯỜI DÙNG ĐANG ĐĂNG NHẬP) -->
+    <div class="modal fade" id="selfProfileModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header text-white py-3 px-4" style="background: linear-gradient(135deg, #1b5e20, #2e7d32);">
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0">
+                            <i class="fa-solid fa-user-shield me-2"></i>Hồ Sơ Cá Nhân & Đổi Mật Khẩu
+                        </h5>
+                        <small class="text-white-50" id="selfProfileHeaderSub">Tài khoản đang đăng nhập</small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-3 p-md-4 bg-light">
+                    <!-- Thanh chuyển Tab trong Modal -->
+                    <div class="d-flex gap-2 mb-3 border-bottom pb-2">
+                        <button type="button" class="btn btn-sm btn-success fw-bold px-3 rounded-pill" id="btnSelfTabPassword" onclick="window.switchSelfProfileTab('password')">
+                            <i class="fa-solid fa-key me-1"></i> Đổi Mật Khẩu
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3 rounded-pill" id="btnSelfTabInfo" onclick="window.switchSelfProfileTab('info')">
+                            <i class="fa-solid fa-address-card me-1"></i> Thông Tin Cá Nhân
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: TỰ ĐỔI MẬT KHẨU -->
+                    <div id="selfTabPasswordPane">
+                        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+                            <div class="alert alert-success py-2 px-3 small mb-3">
+                                <i class="fa-solid fa-circle-info me-1"></i> Bạn có thể tự thay đổi mật khẩu đăng nhập cá nhân bất kỳ lúc nào để bảo mật tài khoản.
+                            </div>
+                            <form id="selfChangePasswordForm" onsubmit="window.submitSelfChangePassword(event)">
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Mật khẩu hiện tại <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light"><i class="fa-solid fa-lock text-secondary"></i></span>
+                                        <input type="password" class="form-control" id="selfCurPassword" required placeholder="Nhập mật khẩu đang sử dụng...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="window.toggleInputEye('selfCurPassword', this)">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Mật khẩu mới <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light"><i class="fa-solid fa-key text-success"></i></span>
+                                            <input type="password" class="form-control" id="selfNewPassword" required placeholder="Nhập mật khẩu mới...">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="window.toggleInputEye('selfNewPassword', this)">
+                                                <i class="fa-solid fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Nhập lại mật khẩu mới <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light"><i class="fa-solid fa-check-double text-success"></i></span>
+                                            <input type="password" class="form-control" id="selfConfirmPassword" required placeholder="Xác nhận lại mật khẩu mới...">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="window.toggleInputEye('selfConfirmPassword', this)">
+                                                <i class="fa-solid fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">Đóng</button>
+                                    <button type="submit" class="btn btn-success fw-bold px-4" id="btnSubmitSelfPwd">
+                                        <i class="fa-solid fa-floppy-disk me-1"></i> Cập Nhật Mật Khẩu Mới
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: CẬP NHẬT HỒ SƠ CÁ NHÂN CỦA TÔI -->
+                    <div id="selfTabInfoPane" class="d-none">
+                        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+                            <form id="selfProfileInfoForm" onsubmit="window.submitSelfProfileInfo(event)">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold mb-1">Họ và Tên đầy đủ <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="selfFullName" required>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold mb-1">Giới tính</label>
+                                        <select class="form-select form-select-sm" id="selfGender">
+                                            <option value="Nam">Nam</option>
+                                            <option value="Nữ">Nữ</option>
+                                            <option value="Khác">Khác</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold mb-1">Ngày sinh</label>
+                                        <input type="date" class="form-control form-control-sm" id="selfBirthday">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold mb-1">Số điện thoại</label>
+                                        <input type="tel" class="form-control form-control-sm" id="selfPhone" placeholder="Số điện thoại...">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold mb-1">Email</label>
+                                        <input type="email" class="form-control form-control-sm" id="selfEmail" placeholder="Email cá nhân...">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold mb-1">Số CCCD / CMND</label>
+                                        <input type="text" class="form-control form-control-sm" id="selfCitizenId" placeholder="Số CCCD...">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label small fw-bold mb-1">Địa chỉ hiện tại</label>
+                                        <input type="text" class="form-control form-control-sm" id="selfAddress" placeholder="Số nhà, đường, phường/xã, quận/huyện...">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold mb-1">Liên hệ khẩn cấp</label>
+                                        <input type="text" class="form-control form-control-sm" id="selfEmergencyContact" placeholder="Người thân & SĐT...">
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 mt-3 pt-2 border-top small text-muted">
+                                    <div class="col-md-6">
+                                        <i class="fa-regular fa-calendar-plus text-success me-1"></i> Ngày tạo tài khoản: <b id="selfCreatedAtText">---</b>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <i class="fa-solid fa-clock-rotate-left text-primary me-1"></i> Sửa gần nhất: <b id="selfUpdatedAtText">---</b>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-end gap-2 mt-3">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">Đóng</button>
+                                    <button type="submit" class="btn btn-primary fw-bold px-4">
+                                        <i class="fa-solid fa-check me-1"></i> Lưu Thông Tin Cá Nhân
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Tải Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/bootstrap.bundle.min.js"></script>
@@ -926,25 +1095,25 @@
     <!-- Tải các file JS dự án theo thứ tự -->
     <script src="js/toast.js?v=20261007_14"></script>
     <script src="js/delivery-orders.js?v=20261007_14"></script>
-    <script src="js/orders.js?v=20261012_03"></script>
+    <script src="js/orders.js?v=20261013_08"></script>
     <script src="/js/jsQR.js"></script>
-    <script src="/js/cart.js?v=20261007_14"></script>
+    <script src="/js/cart.js?v=20261013_08"></script>
     <script src="js/categories.js?v=20261007_14"></script>
-    <script src="js/menu.js?v=20261007_14"></script>
+    <script src="js/menu.js?v=20261013_02"></script>
     <script src="js/menu-cards.js?v=20261007_14"></script>
-    <script src="js/users.js?v=20261007_14"></script>
+    <script src="js/users.js?v=20261013_05"></script>
     <script src="js/payments.js?v=20261007_14"></script>
     <script src="js/sound-service.js?v=20261007_14"></script>
     <script src="js/wake-lock.js?v=20261007_14"></script>
-    <script src="js/system-settings.js?v=20261012_03"></script>
+    <script src="js/system-settings.js?v=20261013_08"></script>
     <script src="js/ready-tv-screensaver.js?v=20261007_14"></script>
     <script src="js/ready-orders.js?v=20261007_14"></script>
-    <script src="js/kitchen.js?v=20261007_14"></script>
-    <script id="tables-js" src="js/tables.js?v=20261007_14"></script>
-    <script src="js/members.js?v=20261007_14"></script>
-    <script src="js/login-modal.js?v=20261012_01"></script>
-    <script src="js/guest-home.js?v=20261012_02"></script>
-    <script src="js/router.js?v=20261007_14"></script>
+    <script src="js/kitchen.js?v=20261013_08"></script>
+    <script id="tables-js" src="js/tables.js?v=20261013_08"></script>
+    <script src="js/members.js?v=20261013_06"></script>
+    <script src="js/login-modal.js?v=20261013_04"></script>
+    <script src="js/guest-home.js?v=20261013_06"></script>
+    <script src="js/router.js?v=20261013_01"></script>
 
     <!-- Script cập nhật số lượng đơn thời gian thực cho Navbar Badges -->
     <script>
@@ -956,9 +1125,11 @@
                 
                 const readyBadge = document.getElementById('navReadyOrdersBadge');
                 const kitchenBadge = document.getElementById('navKitchenPendingBadge');
+                const mobileTotalBadge = document.getElementById('mobileMenuTotalBadge');
 
                 const readyCount = Number(data.readyOrdersCount || 0);
                 const pendingCount = Number(data.pendingKitchenCount || 0);
+                const totalCount = readyCount + pendingCount;
 
                 if (readyBadge) {
                     if (readyCount > 0) {
@@ -975,6 +1146,15 @@
                         kitchenBadge.style.display = 'inline-flex';
                     } else {
                         kitchenBadge.style.display = 'none';
+                    }
+                }
+
+                if (mobileTotalBadge) {
+                    if (totalCount > 0) {
+                        mobileTotalBadge.innerText = totalCount > 99 ? '99+' : totalCount;
+                        mobileTotalBadge.style.display = 'inline-flex';
+                    } else {
+                        mobileTotalBadge.style.display = 'none';
                     }
                 }
             } catch (err) {
@@ -995,9 +1175,11 @@
                 globalSocket.on('order_counts_updated', (data) => {
                     const readyBadge = document.getElementById('navReadyOrdersBadge');
                     const kitchenBadge = document.getElementById('navKitchenPendingBadge');
+                    const mobileTotalBadge = document.getElementById('mobileMenuTotalBadge');
                     if (data) {
                         const readyCount = Number(data.readyOrdersCount || 0);
                         const pendingCount = Number(data.pendingKitchenCount || 0);
+                        const totalCount = readyCount + pendingCount;
                         if (readyBadge) {
                             readyBadge.innerText = readyCount;
                             readyBadge.style.display = readyCount > 0 ? 'inline-flex' : 'none';
@@ -1005,6 +1187,10 @@
                         if (kitchenBadge) {
                             kitchenBadge.innerText = pendingCount;
                             kitchenBadge.style.display = pendingCount > 0 ? 'inline-flex' : 'none';
+                        }
+                        if (mobileTotalBadge) {
+                            mobileTotalBadge.innerText = totalCount > 99 ? '99+' : totalCount;
+                            mobileTotalBadge.style.display = totalCount > 0 ? 'inline-flex' : 'none';
                         }
                     } else {
                         window.updateNavOrderBadges();

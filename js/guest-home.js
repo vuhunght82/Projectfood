@@ -677,7 +677,29 @@
         if (joinEl) joinEl.innerText = member.Created_at ? new Date(member.Created_at).toLocaleDateString('vi-VN') : '---';
         if (spentEl) spentEl.innerText = Number(member.Total_spent || 0).toLocaleString('vi-VN') + ' đ';
         if (discEl) discEl.innerText = (member.tierInfo?.discountPercent || 0) + '%';
-        if (birthEl) birthEl.innerText = member.tierInfo?.birthdayReward || 'Ưu đãi sinh nhật thanh tịnh';
+        if (birthEl) {
+            const baseReward = member.tierInfo?.birthdayReward || 'Ưu đãi sinh nhật thanh tịnh';
+            const bInfo = member.birthdayInfo || {};
+            const curYear = bInfo.currentYear || new Date().getFullYear();
+            let giftStatusHtml = '';
+            if (bInfo.hasReceivedGiftThisYear && bInfo.giftRecord) {
+                const gr = bInfo.giftRecord;
+                const ordCode = gr.Order_code || (gr.Order_id ? `#${gr.Order_id}` : '---');
+                const dtStr = gr.Gifted_at ? new Date(gr.Gifted_at).toLocaleDateString('vi-VN') : '';
+                giftStatusHtml = `<div class="mt-1 p-1 px-2 rounded-2 bg-success-subtle border border-success-subtle text-success small fw-normal">
+                    <i class="fa-solid fa-circle-check me-1"></i><b>Đã nhận quà năm ${curYear}:</b> ${gr.Gift_name} <span class="badge bg-white text-dark border ms-1">Đơn ${ordCode}</span> ${dtStr ? `<span class="text-muted">(${dtStr})</span>` : ''}
+                </div>`;
+            } else if (bInfo.isBirthdaySoon) {
+                giftStatusHtml = `<div class="mt-1 p-1 px-2 rounded-2 bg-danger-subtle border border-danger-subtle text-danger small fw-normal">
+                    <i class="fa-solid fa-gift me-1"></i><b>Tuần lễ sinh nhật (${bInfo.label || 'Sắp tới'}):</b> Quý khách đủ điều kiện nhận <b>01 món quà sinh nhật miễn phí (0đ)</b> tại quầy!
+                </div>`;
+            } else if (bInfo.hasBirthday) {
+                giftStatusHtml = `<div class="mt-1 small text-muted fw-normal">
+                    <i class="fa-solid fa-cake-candles me-1 text-danger"></i>Sinh nhật: <b>${bInfo.birthDayMonth}</b> &bull; Quà năm ${curYear}: <span class="badge bg-light text-secondary border">Chưa nhận</span>
+                </div>`;
+            }
+            birthEl.innerHTML = `<div>${baseReward}</div>${giftStatusHtml}`;
+        }
 
         // 🌟 NẠP & HIỂN THỊ CÁC CHIẾN DỊCH QUẢNG CÁO & MÃ GIẢM GIÁ CHO HỘI VIÊN
         loadGuestPromotions(member);
@@ -976,6 +998,10 @@
                     } else if (act === 'PASSWORD_CHANGED') {
                         actionBadge = '<span class="badge bg-secondary-subtle text-secondary border fw-bold"><i class="fa-solid fa-key me-1"></i>Đổi Mật Khẩu</span>';
                         deltaStr = `<span class="text-muted small">Bảo mật</span>`;
+                    } else if (act === 'BIRTHDAY_GIFT') {
+                        actionBadge = '<span class="badge bg-danger-subtle text-danger border border-danger fw-bold"><i class="fa-solid fa-cake-candles me-1"></i>Tặng Quà Sinh Nhật</span>';
+                        deltaStr = `<span class="badge bg-danger text-white">0 đ (Tặng 100%)</span>`;
+                        afterStr = `<span class="text-success small fw-bold"><i class="fa-solid fa-check me-1"></i>Đã nhận quà</span>`;
                     } else {
                         actionBadge = `<span class="badge bg-light text-dark border fw-bold"><i class="fa-solid fa-clock-rotate-left me-1"></i>${item.action || 'Thao tác'}</span>`;
                         if (item.amountChange) {
@@ -1344,6 +1370,32 @@
             }
             if (newCfg && (newCfg.restaurant_lat || newCfg.restaurant_lng || newCfg.restaurant_name || newCfg.restaurant_address)) {
                 if (typeof loadGuestRestaurantInfo === 'function') loadGuestRestaurantInfo();
+            }
+        });
+        // Lắng nghe cập nhật biến động số dư ví / điểm hội viên để tự động làm mới thẻ & nhật ký ngay lập tức
+        sock.on('member_balance_updated', (data) => {
+            if (window._currentGuestMember && (!data || !data.Member_id || data.Member_id === window._currentGuestMember.Member_id)) {
+                if (typeof window.loadMyMemberCard === 'function') {
+                    window.loadMyMemberCard();
+                }
+            }
+        });
+        sock.on('member_tier_upgraded', (data) => {
+            if (window._currentGuestMember && (!data || !data.Member_id || data.Member_id === window._currentGuestMember.Member_id)) {
+                if (typeof window.loadMyMemberCard === 'function') {
+                    window.loadMyMemberCard();
+                }
+            }
+        });
+        // Lắng nghe thay đổi trạng thái đơn hàng / thanh toán / sửa đơn để cập nhật ngay lịch sử đơn hàng của khách
+        sock.on('order_status_updated', () => {
+            if (window._currentGuestMember && typeof window.loadMyMemberCard === 'function') {
+                window.loadMyMemberCard();
+            }
+        });
+        sock.on('table_updated', () => {
+            if (window._currentGuestMember && typeof window.loadMyMemberCard === 'function') {
+                window.loadMyMemberCard();
             }
         });
     }
