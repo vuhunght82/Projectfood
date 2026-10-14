@@ -1,4 +1,4 @@
-name: Build iOS IPA (Tauri v2)
+name: Build iOS ARM64 App (Tauri v2)
 
 on:
   push:
@@ -15,12 +15,10 @@ jobs:
       - name: 1. Checkout repository
         uses: actions/checkout@v4
 
-      - name: 2. Select Xcode 16 (Fix project format 77)
+      - name: 2. Select Xcode 16
         run: |
-          echo "Available Xcode versions:"
-          ls -d /Applications/Xcode*
           XCODE16=$(ls -d /Applications/Xcode_16*.app | sort -V | tail -n 1)
-          echo "Selecting $XCODE16"
+          echo "Using Xcode: $XCODE16"
           sudo xcode-select -s "$XCODE16/Contents/Developer"
           xcodebuild -version
 
@@ -30,26 +28,32 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: 4. Setup Rust Toolchain (iOS Targets)
+      - name: 4. Setup Rust Toolchain (ARM64 iOS)
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
 
-      - name: 5. Install iOS Build Tools (xcodegen, cocoapods, ldid)
+      - name: 5. Install iOS Build Tools
         run: |
           arch -arm64 brew install xcodegen cocoapods ldid jq
 
-      - name: 6. Install NPM Dependencies & Tauri CLI v2
+      - name: 6. Inject "tauri" script into package.json & Install CLI
         run: |
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.scripts = pkg.scripts || {};
+            pkg.scripts["tauri"] = "tauri";
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2));
+          '
           npm install --no-audit --no-fund
           npm install --save-dev @tauri-apps/cli@^2.0.0 --no-audit --no-fund
 
-      - name: 7. Auto-Generate Complete Tauri v2 Project (src-tauri)
+      - name: 7. Generate Complete Tauri v2 Project (src-tauri)
         run: |
           rm -rf src-tauri
           mkdir -p src-tauri/src src-tauri/icons
 
-          # 7.1 Tạo tauri.conf.json chuẩn Tauri v2, trỏ về http://221.132.21.152:3000
           cat << 'EOF' > src-tauri/tauri.conf.json
           {
             "$schema": "https://schema.tauri.app/config/2",
@@ -88,13 +92,10 @@ jobs:
           }
           EOF
 
-          # 7.2 Tạo Cargo.toml chuẩn cho Mobile + Desktop
           cat << 'EOF' > src-tauri/Cargo.toml
           [package]
           name = "project-food"
           version = "1.0.0"
-          description = "Project Food iOS App"
-          authors = ["ProjectFood"]
           edition = "2021"
 
           [lib]
@@ -110,14 +111,12 @@ jobs:
           serde_json = "1"
           EOF
 
-          # 7.3 Tạo build.rs
           cat << 'EOF' > src-tauri/build.rs
           fn main() {
               tauri_build::build()
           }
           EOF
 
-          # 7.4 Tạo src/lib.rs có mobile_entry_point
           cat << 'EOF' > src-tauri/src/lib.rs
           #[cfg_attr(mobile, tauri::mobile_entry_point)]
           pub fn run() {
@@ -127,16 +126,13 @@ jobs:
           }
           EOF
 
-          # 7.5 Tạo src/main.rs
           cat << 'EOF' > src-tauri/src/main.rs
           #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
           fn main() {
               project_food_lib::run();
           }
           EOF
 
-          # 7.6 Tạo icon PNG 1024x1024 hợp lệ và sinh toàn bộ bộ icon chuẩn iOS
           python3 -c '
           import struct, zlib
           def make_png(w, h):
@@ -148,7 +144,7 @@ jobs:
           '
           npx tauri icon src-tauri/icons/app-icon.png
 
-      - name: 8. Rust Cache (Tăng tốc biên dịch từ lần chạy thứ 2)
+      - name: 8. Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -159,11 +155,10 @@ jobs:
         run: |
           npx tauri ios init
 
-      - name: 10. Configure Info.plist (Cho phép HTTP không mã hóa về 221.132.21.152:3000)
+      - name: 10. Configure Info.plist (Allow HTTP to 221.132.21.152:3000)
         run: |
           for plist in src-tauri/gen/apple/*/Info.plist; do
             if [ -f "$plist" ]; then
-              echo "Patching ATS in $plist"
               /usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity" "$plist" 2>/dev/null || true
               /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$plist"
               /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$plist"
@@ -171,23 +166,13 @@ jobs:
             fi
           done
 
-      - name: 11. Build iOS App & Package into .IPA
+      - name: 11. Build ARM64 .app (Real Device - Unsigned)
         run: |
-          # Bước 11.1: Build Simulator trước bằng Tauri CLI để đảm bảo toàn bộ bindings/scripts được thiết lập chuẩn
-          npx tauri ios build --target aarch64-sim
-
-          # Bước 11.2: Biên dịch static library của Rust cho thiết bị iOS thật (aarch64-apple-ios)
-          cargo build --manifest-path src-tauri/Cargo.toml --target aarch64-apple-ios --release
-
-          # Copy thư viện Rust đã biên dịch vào thư mục Externals của Xcode
-          mkdir -p src-tauri/gen/apple/Externals/arm64/Release
-          cp src-tauri/target/aarch64-apple-ios/release/libproject_food_lib.a src-tauri/gen/apple/Externals/arm64/Release/libapp.a
-
-          # Bước 11.3: Dùng xcodebuild biên dịch bản Release cho iPhone thật (bỏ qua yêu cầu chứng chỉ Apple trả phí)
           WORKSPACE_PATH=$(ls -d src-tauri/gen/apple/*.xcodeproj/project.xcworkspace | head -n 1)
           SCHEME_NAME=$(xcodebuild -workspace "$WORKSPACE_PATH" -list -json | jq -r '.workspace.schemes[]' | grep "_iOS" | head -n 1)
-          echo "Building Workspace: $WORKSPACE_PATH | Scheme: $SCHEME_NAME"
+          echo "Workspace: $WORKSPACE_PATH \vert{} Scheme:$SCHEME_NAME"
 
+          # Biên dịch thẳng ra .app cho thiết bị thật ARM64 (iphoneos)
           xcodebuild -workspace "$WORKSPACE_PATH" \
             -scheme "$SCHEME_NAME" \
             -sdk iphoneos \
@@ -199,33 +184,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-          # Bước 11.4: Tìm gói .app vừa build, ký giả lập bằng ldid và đóng gói thành file .ipa
           APP_PATH=$(find src-tauri/gen/apple/DerivedData/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
-          echo "Found built .app at: $APP_PATH"
+          echo "Built ARM64 .app at: $APP_PATH"
 
-          # Ký ad-hoc entitlements bằng ldid để tránh crash trên iOS khi sideload
-          ldid -S "$APP_PATH"
-
-          # Đóng gói chuẩn cấu trúc Payload -> .ipa
-          mkdir -p build-output/Payload
-          cp -r "$APP_PATH" build-output/Payload/
-          cd build-output
-          zip -r9 ProjectFood-iOS.ipa Payload
-          cd ..
-
-          # Copy thêm bản Simulator .app ra cùng thư mục kết quả để dự phòng
-          SIM_APP_PATH=$(find src-tauri/gen/apple/build -name "*.app" | head -n 1 || true)
-          if [ -n "$SIM_APP_PATH" ]; then
-            zip -r9 build-output/ProjectFood-Simulator-app.zip "$SIM_APP_PATH"
-          fi
-
-          ls -lh build-output/
-
-      - name: 12. Upload IPA Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ProjectFood-iOS-IPA
-          path: |
-            build-output/ProjectFood-iOS.ipa
-            build-output/ProjectFood-Simulator-app.zip
-          if-no-files-found: error
+          # Ký giả lập ad-hoc bằng ldid
+          ldid -
