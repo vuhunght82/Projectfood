@@ -1,0 +1,18 @@
+[package]
+name = "hoa-sen-pos"
+version = "1.0.0"
+description = "Ung dung POS & Van hanh Quan Chay Hoa Sen"
+authors = ["Hoa Sen Dev Team"]
+edition = "2021"
+
+[lib]
+name = "hoa_sen_pos_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
