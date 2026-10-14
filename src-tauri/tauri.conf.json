@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Nhà Hàng Chay Hoa Sen - POS & Vận Hành",
         "url": "https://hoangphucglass.cloud",
         "width": 1280,
@@ -20,22 +21,23 @@
         "fullscreen": false
       }
     ],
-  "security": {
-    "csp": null,
-    "capabilities": [
-      {
-        "identifier": "remote-url-allow",
-        "windows": ["main"],
-        "remote": {
-          "urls": ["https://hoangphucglass.cloud*"]
-        },
-        "permissions": []
-      }
-    ]
+    "security": {
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "remote-url-allow",
+          "windows": ["main"],
+          "remote": {
+            "urls": ["https://hoangphucglass.cloud*"]
+          },
+          "permissions": []
+        }
+      ]
+    }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": [  ]
+    "icon": []
   }
 }
