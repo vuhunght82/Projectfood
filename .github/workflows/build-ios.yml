@@ -166,26 +166,68 @@ jobs:
             fi
           done
 
-      - name: 11. Build ARM64 .app (Real Device - Unsigned)
+      - name: 11. Build ARM64 .app via Tauri CLI (Unsigned Wrapper)
         run: |
-          WORKSPACE_PATH=$(ls -d src-tauri/gen/apple/*.xcodeproj/project.xcworkspace | head -n 1)
-          SCHEME_NAME=$(xcodebuild -workspace "$WORKSPACE_PATH" -list -json | jq -r '.workspace.schemes[]' | grep "_iOS" | head -n 1)
-          echo "Workspace: $WORKSPACE_PATH \vert{} Scheme:$SCHEME_NAME"
+          # Tạo wrapper cho xcodebuild để tự động chèn cờ bỏ qua Code Signing khi Tauri CLI gọi xcodebuild
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat << 'EOF' > "$RUNNER_TEMP/bin/xcodebuild"
+          #!/bin/bash
+          REAL_XCODEBUILD="/usr/bin/xcodebuild"
+          # Nếu lệnh là archive hoặc build cho iphoneos thì chèn cờ tắt yêu cầu chứng chỉ Apple
+          if [[ "$*" == *"-sdk iphoneos"* ]] || [[ "$*" == *"archive"* ]] || [[ "$*" == *"build"* ]]; then
+            exec "$REAL_XCODEBUILD" "$@" CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          else
+            exec "$REAL_XCODEBUILD" "$@"
+          fi
+          EOF
+          chmod +x "$RUNNER_TEMP/bin/xcodebuild"
+          export PATH="$RUNNER_TEMP/bin:$PATH"
 
-          # Biên dịch thẳng ra .app cho thiết bị thật ARM64 (iphoneos)
-          xcodebuild -workspace "$WORKSPACE_PATH" \
-            -scheme "$SCHEME_NAME" \
-            -sdk iphoneos \
-            -configuration Release \
-            -arch arm64 \
-            -derivedDataPath src-tauri/gen/apple/DerivedData \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+          # Chạy lệnh chính thức của Tauri CLI cho kiến trúc thiết bị thật ARM64 (aarch64)
+          # Nhờ chạy qua Tauri CLI, file .tauri/cli-options-server.json được khởi tạo chuẩn xác
+          npx tauri ios build --target aarch64 --ci || true
 
-          APP_PATH=$(find src-tauri/gen/apple/DerivedData/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
-          echo "Built ARM64 .app at: $APP_PATH"
+          # Tìm gói .app ARM64 vừa được tạo ra trong thư mục build hoặc xcarchive
+          APP_PATH=$(find src-tauri/gen/apple ~/Library/Developer/Xcode/DerivedData -name "*.app" | grep -iE "Release-iphoneos|ArchiveIntermediates|Products/Applications" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find src-tauri/gen/apple ~/Library/Developer/Xcode/DerivedData -name "*_iOS.app" | head -n 1)
+          fi
 
-          # Ký giả lập ad-hoc bằng ldid
-          ldid -
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+            echo "Error: Could not find built .app!"
+            find src-tauri/gen/apple -maxdepth 5
+            exit 1
+          fi
+
+          echo "Found built ARM64 .app at: $APP_PATH"
+
+          # Ký giả lập ad-hoc bằng ldid để cài qua Sideloadly / TrollStore không bị văng
+          ldid -S "$APP_PATH"
+
+          mkdir -p "$GITHUB_WORKSPACE/output-artifacts"
+
+          # 1. Đóng gói file .app.zip
+          APP_DIR=$(dirname "$APP_PATH")
+          APP_NAME=$(basename "$APP_PATH")
+          cd "$APP_DIR"
+          zip -r9 "$GITHUB_WORKSPACE/output-artifacts/ProjectFood-ARM64.app.zip" "$APP_NAME"
+          cd "$GITHUB_WORKSPACE"
+
+          # 2. Đóng gói sẵn file .ipa chuẩn (Payload/*.app)
+          mkdir -p "$GITHUB_WORKSPACE/output-artifacts/Payload"
+          cp -r "$APP_PATH" "$GITHUB_WORKSPACE/output-artifacts/Payload/"
+          cd "$GITHUB_WORKSPACE/output-artifacts"
+          zip -r9 ProjectFood-ARM64-Unsigned.ipa Payload
+          rm -rf Payload
+          cd "$GITHUB_WORKSPACE"
+
+          ls -lh "$GITHUB_WORKSPACE/output-artifacts/"
+
+      - name: 12. Upload ARM64 .app & .ipa Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectFood-iOS-ARM64
+          path: |
+            output-artifacts/ProjectFood-ARM64.app.zip
+            output-artifacts/ProjectFood-ARM64-Unsigned.ipa
+          if-no-files-found: error
