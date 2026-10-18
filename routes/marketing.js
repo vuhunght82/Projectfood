@@ -268,7 +268,11 @@ router.post('/campaigns', (req, res) => {
 
         db.close();
         const io = req.app.get('io');
-        if (io) io.emit('banners_updated');
+        if (io) {
+            io.emit('banners_updated');
+            io.emit('campaigns_updated');
+            io.emit('vouchers_updated');
+        }
 
         res.json({ success: true, message: 'Đã tạo chiến dịch thành công!', campaignId: result.lastInsertRowid });
     } catch (err) {
@@ -447,8 +451,8 @@ router.post('/push-vouchers', (req, res) => {
                 SELECT Member_id, Full_name, Phone, Email, Current_tier, Created_at 
                 FROM MEMBERS 
                 WHERE Is_active = 1 AND (
-                    strftime('%m', Birthday) = strftime('%m', 'now', 'localtime') 
-                    OR substr(Birthday, 6, 2) = strftime('%m', 'now', 'localtime')
+                    strftime('%m', Birthdate) = strftime('%m', 'now', 'localtime') 
+                    OR substr(Birthdate, 6, 2) = strftime('%m', 'now', 'localtime')
                 )
             `).all();
         } else if (targetType === 'HAS_EMAIL') {
@@ -2275,7 +2279,23 @@ router.get('/target-groups', (req, res) => {
         `);
         const groups = db.prepare("SELECT * FROM MARKETING_TARGET_GROUPS ORDER BY Group_id DESC").all();
         db.close();
-        res.json({ success: true, groups });
+        const formatted = groups.map(g => {
+            let memberIds = [];
+            try {
+                memberIds = JSON.parse(g.Member_ids || '[]');
+            } catch(e) {
+                memberIds = [];
+            }
+            return {
+                Group_id: g.Group_id,
+                Name: g.Name,
+                Group_name: g.Name,
+                Description: g.Description || '',
+                Member_ids: memberIds,
+                Created_at: g.Created_at
+            };
+        });
+        res.json({ success: true, groups: formatted });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -2283,8 +2303,10 @@ router.get('/target-groups', (req, res) => {
 
 router.post('/target-groups', (req, res) => {
     try {
-        const { name, description = '', memberIds = [] } = req.body;
-        if (!name || !name.trim()) {
+        const name = (req.body.name || req.body.Group_name || '').trim();
+        const description = (req.body.description || req.body.Description || '').trim();
+        const memberIds = req.body.memberIds || req.body.Member_ids || [];
+        if (!name) {
             return res.status(400).json({ success: false, error: 'Vui lòng nhập tên nhóm đối tượng!' });
         }
         const db = getDb();
@@ -2298,7 +2320,7 @@ router.post('/target-groups', (req, res) => {
             );
         `);
         const jsonIds = JSON.stringify(Array.isArray(memberIds) ? memberIds : []);
-        const info = db.prepare("INSERT INTO MARKETING_TARGET_GROUPS (Name, Description, Member_ids) VALUES (?, ?, ?)").run(name.trim(), description.trim(), jsonIds);
+        const info = db.prepare("INSERT INTO MARKETING_TARGET_GROUPS (Name, Description, Member_ids) VALUES (?, ?, ?)").run(name, description, jsonIds);
         db.close();
 
         const io = req.app.get('io');
@@ -2313,13 +2335,15 @@ router.post('/target-groups', (req, res) => {
 router.put('/target-groups/:id', (req, res) => {
     try {
         const id = req.params.id;
-        const { name, description = '', memberIds = [] } = req.body;
-        if (!name || !name.trim()) {
+        const name = (req.body.name || req.body.Group_name || '').trim();
+        const description = (req.body.description || req.body.Description || '').trim();
+        const memberIds = req.body.memberIds || req.body.Member_ids || [];
+        if (!name) {
             return res.status(400).json({ success: false, error: 'Vui lòng nhập tên nhóm đối tượng!' });
         }
         const db = getDb();
         const jsonIds = JSON.stringify(Array.isArray(memberIds) ? memberIds : []);
-        db.prepare("UPDATE MARKETING_TARGET_GROUPS SET Name = ?, Description = ?, Member_ids = ? WHERE Group_id = ?").run(name.trim(), description.trim(), jsonIds, id);
+        db.prepare("UPDATE MARKETING_TARGET_GROUPS SET Name = ?, Description = ?, Member_ids = ? WHERE Group_id = ?").run(name, description, jsonIds, id);
         db.close();
 
         const io = req.app.get('io');

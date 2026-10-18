@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Hoa Sen POS</string>
+    <string name="default_server_url">https://192.168.100.100:3443</string>
+</resources>
+

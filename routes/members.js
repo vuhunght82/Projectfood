@@ -306,11 +306,83 @@ function getTodayLunarInfo(db) {
     };
 }
 
+// Khởi tạo bảng Danh sách món quà sinh nhật (BIRTHDAY_GIFT_ITEMS) & Lịch sử nhận quà sinh nhật (BIRTHDAY_GIFT_LOGS)
+let _birthdayTablesInitialized = false;
+function ensureBirthdayTables(db) {
+    if (_birthdayTablesInitialized) return;
+    try {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS BIRTHDAY_GIFT_ITEMS (
+                Gift_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Gift_name TEXT NOT NULL,
+                Category_label TEXT DEFAULT 'Tráng miệng',
+                Ref_price INTEGER DEFAULT 35000,
+                Icon TEXT DEFAULT '🎁',
+                Note TEXT DEFAULT 'Quà tặng sinh nhật hội viên (0đ)',
+                Is_active INTEGER DEFAULT 1,
+                Sort_order INTEGER DEFAULT 1,
+                Created_at TEXT DEFAULT (datetime('now', 'localtime'))
+            );
+
+            CREATE TABLE IF NOT EXISTS BIRTHDAY_GIFT_LOGS (
+                Bday_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Member_id INTEGER NOT NULL,
+                Member_name TEXT,
+                Member_phone TEXT,
+                Birthdate TEXT,
+                Birth_year INTEGER NOT NULL,
+                Gift_id INTEGER,
+                Gift_name TEXT NOT NULL,
+                Ref_price INTEGER DEFAULT 0,
+                Order_id INTEGER,
+                Order_code TEXT,
+                Table_number TEXT,
+                Staff_name TEXT,
+                Status TEXT DEFAULT 'GIFTED',
+                Gifted_at TEXT DEFAULT (datetime('now', 'localtime'))
+            );
+        `);
+
+        const countRow = db.prepare("SELECT COUNT(*) as c FROM BIRTHDAY_GIFT_ITEMS").get();
+        if (!countRow || countRow.c === 0) {
+            const seedStmt = db.prepare(`
+                INSERT INTO BIRTHDAY_GIFT_ITEMS (Gift_name, Category_label, Ref_price, Icon, Note, Is_active, Sort_order)
+                VALUES (?, ?, ?, ?, ?, 1, ?)
+            `);
+            seedStmt.run('Đĩa trái cây tráng miệng tươi mát', 'Tráng miệng', 45000, '🍉', 'Quà tặng sinh nhật hội viên (0đ)', 1);
+            seedStmt.run('Kem thuần chay mát lạnh', 'Kem tráng miệng', 35000, '🍨', 'Quà tặng sinh nhật hội viên (0đ)', 2);
+            seedStmt.run('Chè ngọt thanh tịnh (Hạt sen / Khúc bạch)', 'Chè ngọt', 35000, '🥣', 'Quà tặng sinh nhật hội viên (0đ)', 3);
+            seedStmt.run('Trà sen vàng / Nước ép thanh lọc', 'Đồ uống tri ân', 40000, '🍵', 'Quà tặng sinh nhật hội viên (0đ)', 4);
+        }
+        _birthdayTablesInitialized = true;
+    } catch (e) {
+        console.warn('Lỗi khởi tạo bảng quà sinh nhật:', e.message);
+    }
+}
+
+try {
+    const initDb = getDb();
+    ensureBirthdayTables(initDb);
+    initDb.close();
+} catch (e) {}
+
+function getBirthdayGiftItemsFromDb(db, includeInactive = false) {
+    ensureBirthdayTables(db);
+    try {
+        const sql = includeInactive
+            ? "SELECT * FROM BIRTHDAY_GIFT_ITEMS ORDER BY Sort_order ASC, Gift_id ASC"
+            : "SELECT * FROM BIRTHDAY_GIFT_ITEMS WHERE Is_active = 1 ORDER BY Sort_order ASC, Gift_id ASC";
+        return db.prepare(sql).all();
+    } catch (e) {
+        return [];
+    }
+}
+
 // Kiểm tra xem thành viên có sinh nhật trong tuần này không
 function checkBirthdayStatus(birthdateStr) {
     if (!birthdateStr) return { isBirthdaySoon: false, isBirthdayToday: false, daysUntil: null };
     try {
-        const parts = birthdateStr.split('-');
+        const parts = String(birthdateStr).trim().split('-');
         if (parts.length < 3) return { isBirthdaySoon: false, isBirthdayToday: false, daysUntil: null };
 
         const bMonth = parseInt(parts[1], 10);
@@ -321,29 +393,320 @@ function checkBirthdayStatus(birthdateStr) {
 
         // Ngày sinh nhật trong năm hiện tại
         let nextBirthday = new Date(currentYear, bMonth - 1, bDay);
-        // Nếu sinh nhật đã qua quá 7 ngày, tính năm tới nếu cần
         const todayStart = new Date(currentYear, now.getMonth(), now.getDate());
         const diffMs = nextBirthday.getTime() - todayStart.getTime();
         const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
         const isBirthdayToday = (diffDays === 0);
-        const isBirthdaySoon = (diffDays >= -3 && diffDays <= 7); // Trong khoảng 3 ngày trước đến 7 ngày tới
+        const isBirthdaySoon = (diffDays >= -3 && diffDays <= 7); // Trong tuần sinh nhật (3 ngày trước đến 7 ngày tới)
 
         return {
             isBirthdaySoon,
             isBirthdayToday,
             daysUntil: diffDays,
             bMonth,
-            bDay
+            bDay,
+            birthYear: currentYear
         };
     } catch (e) {
         return { isBirthdaySoon: false, isBirthdayToday: false, daysUntil: null };
     }
 }
 
+// Kiểm tra chi tiết trạng thái nhận quà sinh nhật (chỉ tặng 1 lần vào tuần sinh nhật mỗi năm)
+function getMemberBirthdayGiftStatus(db, member) {
+    ensureBirthdayTables(db);
+    const base = checkBirthdayStatus(member ? member.Birthdate : '');
+    const currentYear = base.birthYear || new Date().getFullYear();
+
+    if (!member || !member.Member_id) {
+        return {
+            ...base,
+            birthYear: currentYear,
+            hasReceivedGiftThisYear: false,
+            eligibleForBirthdayGift: false,
+            giftRecord: null,
+            allGiftLogs: [],
+            availableGiftItems: getBirthdayGiftItemsFromDb(db, false)
+        };
+    }
+
+    let allGiftLogs = [];
+    try {
+        allGiftLogs = db.prepare(`
+            SELECT l.*, o.Status AS Order_status, o.Payment_status AS Order_payment_status
+            FROM BIRTHDAY_GIFT_LOGS l
+            LEFT JOIN ORDERS o ON (l.Order_id = o.Order_id)
+            WHERE l.Member_id = ?
+            ORDER BY l.Bday_log_id DESC
+        `).all(member.Member_id);
+    } catch (e) {
+        allGiftLogs = [];
+    }
+
+    // Lọc bản ghi nhận quà hợp lệ của năm hiện tại (bỏ qua nếu đơn hàng đã bị hủy)
+    const thisYearGift = allGiftLogs.find(g => {
+        const isSameYear = Number(g.Birth_year) === Number(currentYear);
+        const isNotCancelledLog = String(g.Status || 'GIFTED').toUpperCase() !== 'CANCELLED';
+        const ordSt = String(g.Order_status || '').toUpperCase();
+        const isOrderCancelled = ['CANCELLED', 'CANCELED'].includes(ordSt);
+        return isSameYear && isNotCancelledLog && !isOrderCancelled;
+    }) || null;
+
+    const hasReceivedGiftThisYear = Boolean(thisYearGift);
+    const eligibleForBirthdayGift = Boolean(base.isBirthdaySoon && !hasReceivedGiftThisYear);
+
+    return {
+        ...base,
+        birthYear: currentYear,
+        hasReceivedGiftThisYear,
+        eligibleForBirthdayGift,
+        giftRecord: thisYearGift,
+        allGiftLogs,
+        availableGiftItems: getBirthdayGiftItemsFromDb(db, false)
+    };
+}
+
+// Ghi nhận quà tặng sinh nhật khi khách đặt đơn hàng từ Giỏ Hàng
+function recordOrderBirthdayGift(db, { orderId, orderCode, tableName, memberId, memberPhone, items, staffName, io }) {
+    ensureBirthdayTables(db);
+    if (!Array.isArray(items) || items.length === 0) return null;
+
+    // Tìm món quà sinh nhật trong danh sách món của đơn hàng
+    const giftItem = items.find(i =>
+        Boolean(i.isBirthdayGift || i.Is_birthday_gift) ||
+        String(i.name || i.Item_name || '').includes('[Quà Sinh Nhật') ||
+        String(i.note || i.Note || '').includes('[QUÀ SINH NHẬT]')
+    );
+    if (!giftItem) return null;
+
+    let member = null;
+    if (memberId) {
+        member = db.prepare("SELECT * FROM MEMBERS WHERE Member_id = ?").get(memberId);
+    }
+    if (!member && memberPhone) {
+        const cleanPhone = String(memberPhone).replace(/\D/g, '');
+        if (cleanPhone.length >= 7) {
+            member = db.prepare("SELECT * FROM MEMBERS WHERE Phone = ? OR Phone LIKE ?").get(cleanPhone, `%${cleanPhone}`);
+        }
+    }
+    if (!member) return null;
+
+    const currentYear = new Date().getFullYear();
+
+    // Kiểm tra xem đơn này đã được ghi log quà sinh nhật trước đó chưa (tránh ghi trùng khi sửa đơn)
+    const existingForSameOrder = db.prepare(`
+        SELECT * FROM BIRTHDAY_GIFT_LOGS
+        WHERE Member_id = ? AND Birth_year = ? AND (Order_id = ? OR Order_code = ?) AND Status != 'CANCELLED'
+    `).get(member.Member_id, currentYear, orderId, orderCode);
+
+    if (existingForSameOrder) {
+        return existingForSameOrder;
+    }
+
+    // Kiểm tra xem đã nhận ở đơn khác trong năm nay chưa
+    const existingOtherOrder = db.prepare(`
+        SELECT l.*, o.Status AS Order_status
+        FROM BIRTHDAY_GIFT_LOGS l
+        LEFT JOIN ORDERS o ON l.Order_id = o.Order_id
+        WHERE l.Member_id = ? AND l.Birth_year = ? AND l.Status != 'CANCELLED'
+          AND (o.Status IS NULL OR UPPER(o.Status) NOT IN ('CANCELLED', 'CANCELED'))
+    `).get(member.Member_id, currentYear);
+
+    if (existingOtherOrder) {
+        throw new Error(`Hội viên ${member.Full_name} đã nhận quà sinh nhật năm ${currentYear} (${existingOtherOrder.Gift_name} tại đơn #${existingOtherOrder.Order_code}). Chỉ tặng 1 lần vào tuần sinh nhật!`);
+    }
+
+    const cleanGiftName = String(giftItem.giftRawName || giftItem.name || giftItem.Item_name || 'Món quà sinh nhật')
+        .replace(/^\[Quà Sinh Nhật[^\]]*\]\s*/i, '')
+        .trim();
+    const giftId = giftItem.giftId || giftItem.Gift_id || null;
+    const refPrice = Number(giftItem.refPrice || giftItem.Ref_price || 35000);
+    const actor = staffName || 'Nhân viên';
+
+    const info = db.prepare(`
+        INSERT INTO BIRTHDAY_GIFT_LOGS (
+            Member_id, Member_name, Member_phone, Birthdate, Birth_year,
+            Gift_id, Gift_name, Ref_price, Order_id, Order_code, Table_number, Staff_name, Status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GIFTED')
+    `).run(
+        member.Member_id,
+        member.Full_name,
+        member.Phone,
+        member.Birthdate || '',
+        currentYear,
+        giftId,
+        cleanGiftName,
+        refPrice,
+        orderId,
+        orderCode,
+        tableName || '',
+        actor
+    );
+
+    // Ghi đồng thời vào bảng MEMBER_LOGS để hiện trong lịch sử tài khoản khách hàng & Nhật Ký Hệ Thống
+    logMemberAction(db, {
+        Member_id: member.Member_id,
+        Member_name: member.Full_name,
+        Member_phone: member.Phone,
+        Action_type: 'BIRTHDAY_GIFT',
+        Old_tier: member.Current_tier,
+        New_tier: member.Current_tier,
+        Old_value: `SN ${currentYear}: Chưa nhận`,
+        New_value: `${cleanGiftName} (#${orderCode})`,
+        Reason: `🎂 Tặng quà sinh nhật năm ${currentYear}: Món [${cleanGiftName}] theo Đơn hàng #${orderCode} (${tableName || 'Tại quán'})`,
+        Staff_name: actor
+    });
+
+    if (io) {
+        io.emit('birthday_gift_recorded', {
+            Bday_log_id: info.lastInsertRowid,
+            Member_id: member.Member_id,
+            Member_name: member.Full_name,
+            Gift_name: cleanGiftName,
+            Order_id: orderId,
+            Order_code: orderCode,
+            Staff_name: actor
+        });
+    }
+
+    return {
+        Bday_log_id: info.lastInsertRowid,
+        Member_id: member.Member_id,
+        Gift_name: cleanGiftName,
+        Order_id: orderId,
+        Order_code: orderCode
+    };
+}
+
 // ==========================================
 // 3. CÁC API ENDPOINTS
 // ==========================================
+
+// 0. API QUẢN LÝ DANH SÁCH MÓN QUÀ TẶNG SINH NHẬT & LỊCH SỬ TẶNG QUÀ
+router.get('/birthday-gifts/items', (req, res) => {
+    try {
+        const db = getDb();
+        const includeInactive = req.query.all === '1' || req.query.includeInactive === '1';
+        const items = getBirthdayGiftItemsFromDb(db, includeInactive);
+        let menuItems = [];
+        try {
+            menuItems = db.prepare("SELECT Item_id, Item_name, Price, Category_id FROM MENU_ITEMS ORDER BY Item_name ASC").all();
+        } catch (e) {}
+        db.close();
+        res.json({ success: true, items, menuItems });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.post('/birthday-gifts/items', (req, res) => {
+    try {
+        const { Gift_name, Category_label, Ref_price, Icon, Note, Sort_order, Staff_name } = req.body || {};
+        if (!Gift_name || !String(Gift_name).trim()) {
+            return res.status(400).json({ success: false, error: 'Vui lòng nhập tên món quà sinh nhật!' });
+        }
+        const db = getDb();
+        ensureBirthdayTables(db);
+        const info = db.prepare(`
+            INSERT INTO BIRTHDAY_GIFT_ITEMS (Gift_name, Category_label, Ref_price, Icon, Note, Is_active, Sort_order)
+            VALUES (?, ?, ?, ?, ?, 1, ?)
+        `).run(
+            String(Gift_name).trim(),
+            String(Category_label || 'Tráng miệng').trim(),
+            Number(Ref_price || 35000),
+            String(Icon || '🎁').trim(),
+            String(Note || 'Quà tặng sinh nhật hội viên (0đ)').trim(),
+            Number(Sort_order || 1)
+        );
+        logMemberAction(db, {
+            Action_type: 'BIRTHDAY_GIFT_CONFIG',
+            New_value: String(Gift_name).trim(),
+            Reason: `Thêm món quà sinh nhật mới vào danh sách: [${String(Gift_name).trim()}]`,
+            Staff_name: Staff_name || 'Quản Lý'
+        });
+        db.close();
+        res.json({ success: true, giftId: info.lastInsertRowid, message: 'Đã thêm món quà sinh nhật vào danh sách!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.put('/birthday-gifts/items/:id', (req, res) => {
+    try {
+        const id = req.params.id;
+        const { Gift_name, Category_label, Ref_price, Icon, Note, Is_active, Sort_order } = req.body || {};
+        const db = getDb();
+        ensureBirthdayTables(db);
+        const existing = db.prepare("SELECT * FROM BIRTHDAY_GIFT_ITEMS WHERE Gift_id = ?").get(id);
+        if (!existing) {
+            db.close();
+            return res.status(404).json({ success: false, error: 'Không tìm thấy món quà này!' });
+        }
+        db.prepare(`
+            UPDATE BIRTHDAY_GIFT_ITEMS
+            SET Gift_name = ?,
+                Category_label = ?,
+                Ref_price = ?,
+                Icon = ?,
+                Note = ?,
+                Is_active = ?,
+                Sort_order = ?
+            WHERE Gift_id = ?
+        `).run(
+            Gift_name !== undefined ? String(Gift_name).trim() : existing.Gift_name,
+            Category_label !== undefined ? String(Category_label).trim() : existing.Category_label,
+            Ref_price !== undefined ? Number(Ref_price) : existing.Ref_price,
+            Icon !== undefined ? String(Icon).trim() : existing.Icon,
+            Note !== undefined ? String(Note).trim() : existing.Note,
+            Is_active !== undefined ? Number(Is_active) : existing.Is_active,
+            Sort_order !== undefined ? Number(Sort_order) : existing.Sort_order,
+            id
+        );
+        db.close();
+        res.json({ success: true, message: 'Đã cập nhật món quà sinh nhật!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.delete('/birthday-gifts/items/:id', (req, res) => {
+    try {
+        const id = req.params.id;
+        const db = getDb();
+        ensureBirthdayTables(db);
+        db.prepare("DELETE FROM BIRTHDAY_GIFT_ITEMS WHERE Gift_id = ?").run(id);
+        db.close();
+        res.json({ success: true, message: 'Đã xóa món quà khỏi danh sách!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.get('/birthday-gifts/logs', (req, res) => {
+    try {
+        const db = getDb();
+        ensureBirthdayTables(db);
+        const memberId = req.query.memberId;
+        let sql = `
+            SELECT l.*, o.Status AS Order_status, o.Payment_status AS Order_payment_status, o.Final_amount AS Order_final_amount
+            FROM BIRTHDAY_GIFT_LOGS l
+            LEFT JOIN ORDERS o ON l.Order_id = o.Order_id
+            WHERE 1=1
+        `;
+        const params = [];
+        if (memberId) {
+            sql += " AND l.Member_id = ?";
+            params.push(memberId);
+        }
+        sql += " ORDER BY l.Bday_log_id DESC LIMIT 100";
+        const logs = db.prepare(sql).all(...params);
+        db.close();
+        res.json({ success: true, logs });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 // 1. GET /api/members/lunar/today - Lấy thông tin Âm lịch & ưu đãi x2
 router.get('/lunar/today', (req, res) => {
@@ -798,7 +1161,7 @@ router.get('/lookup', (req, res) => {
         const { map: tierMap } = getTierConfigFromDb(db);
         const tierInfo = tierMap[member.Current_tier] || tierMap.MAM_SEN || DEFAULT_TIER_CONFIG.MAM_SEN;
         const lunarInfo = getTodayLunarInfo(db);
-        const birthdayInfo = checkBirthdayStatus(member.Birthdate);
+        const birthdayInfo = getMemberBirthdayGiftStatus(db, member);
 
         const actualPointRate = lunarInfo.isDoublePoints ? (tierInfo.pointRate * 2) : tierInfo.pointRate;
 
@@ -865,7 +1228,7 @@ router.get('/', (req, res) => {
         const formatted = members.map(m => ({
             ...m,
             tierInfo: tierMap[m.Current_tier] || tierMap.MAM_SEN || DEFAULT_TIER_CONFIG.MAM_SEN,
-            birthdayInfo: checkBirthdayStatus(m.Birthdate)
+            birthdayInfo: getMemberBirthdayGiftStatus(db, m)
         }));
 
         db.close();
@@ -907,10 +1270,20 @@ router.get('/stats/overview', (req, res) => {
         }).map(m => ({
             ...m,
             tierInfo: tierMap[m.Current_tier] || tierMap.MAM_SEN || DEFAULT_TIER_CONFIG.MAM_SEN,
-            birthdayInfo: checkBirthdayStatus(m.Birthdate)
+            birthdayInfo: getMemberBirthdayGiftStatus(db, m)
         }));
 
         const lunarToday = getTodayLunarInfo(db);
+        const birthdayGiftItems = getBirthdayGiftItemsFromDb(db, true);
+        let birthdayGiftLogs = [];
+        try {
+            birthdayGiftLogs = db.prepare(`
+                SELECT l.*, o.Status AS Order_status, o.Payment_status AS Order_payment_status
+                FROM BIRTHDAY_GIFT_LOGS l
+                LEFT JOIN ORDERS o ON l.Order_id = o.Order_id
+                ORDER BY l.Bday_log_id DESC LIMIT 50
+            `).all();
+        } catch (e) {}
 
         db.close();
 
@@ -922,6 +1295,8 @@ router.get('/stats/overview', (req, res) => {
             totalPrepaidAll,
             tierCounts,
             upcomingBirthdays,
+            birthdayGiftItems,
+            birthdayGiftLogs,
             lunarToday
         });
     } catch (err) {
@@ -932,7 +1307,10 @@ router.get('/stats/overview', (req, res) => {
 // 5.5. GET /api/members/logs - Lấy danh sách nhật ký hoạt động hội viên & cấu hình
 router.get('/logs', (req, res) => {
     try {
-        const { memberId, actionType, page = 1, limit = 50 } = req.query;
+        const memberId = req.query.memberId;
+        const actionType = req.query.actionType || req.query.action;
+        const page = req.query.page || 1;
+        const limit = req.query.limit || 50;
         const db = getDb();
 
         let sql = "SELECT * FROM MEMBER_LOGS WHERE 1=1";
@@ -1023,36 +1401,48 @@ router.get('/my-card', (req, res) => {
             ORDER BY Transaction_id DESC LIMIT 50
         `).all(memberId);
 
-        // Tính toán số dư sau cùng cho từng giao dịch
-        let runningPoints = Number(member.Reward_points || 0);
-        let runningPrepaid = Number(member.Prepaid_balance || 0);
+        // Tính toán chính xác số dư sau cùng (Balance after) theo thứ tự thời gian tăng dần
+        const allTxAsc = db.prepare(`
+            SELECT Transaction_id, Points_added, Points_used, Prepaid_added, Prepaid_used 
+            FROM POINT_TRANSACTIONS 
+            WHERE Member_id = ? 
+            ORDER BY Transaction_id ASC
+        `).all(memberId);
+
+        let curPts = 0;
+        let curPrep = 0;
+        const snapshotMap = new Map();
+
+        for (const tx of allTxAsc) {
+            const pAdd = Number(tx.Points_added || 0);
+            const pUse = Number(tx.Points_used || 0);
+            const prAdd = Number(tx.Prepaid_added || 0);
+            const prUse = Number(tx.Prepaid_used || 0);
+
+            if (pAdd > 0 || pUse > 0) curPts = Math.max(0, curPts + pAdd - pUse);
+            if (prAdd > 0 || prUse > 0) curPrep = Math.max(0, curPrep + prAdd - prUse);
+
+            snapshotMap.set(tx.Transaction_id, {
+                pointsAfter: (pAdd > 0 || pUse > 0) ? curPts : null,
+                prepaidAfter: (prAdd > 0 || prUse > 0) ? curPrep : null
+            });
+        }
 
         const transactions = rawTransactions.map(t => {
+            const snap = snapshotMap.get(t.Transaction_id) || { pointsAfter: null, prepaidAfter: null };
             const ptsAdd = Number(t.Points_added || 0);
             const ptsUse = Number(t.Points_used || 0);
             const prepAdd = Number(t.Prepaid_added || 0);
             const prepUse = Number(t.Prepaid_used || 0);
-
-            let pointsAfter = null;
-            let prepaidAfter = null;
-
-            if (ptsAdd > 0 || ptsUse > 0) {
-                pointsAfter = runningPoints;
-                runningPoints = Math.max(0, runningPoints - ptsAdd + ptsUse);
-            }
-            if (prepAdd > 0 || prepUse > 0) {
-                prepaidAfter = runningPrepaid;
-                runningPrepaid = Math.max(0, runningPrepaid - prepAdd + prepUse);
-            }
 
             return {
                 ...t,
                 Transaction_type: t.Type,
                 Points_amount: ptsAdd > 0 ? ptsAdd : ptsUse,
                 Amount_change: prepAdd > 0 ? prepAdd : (prepUse > 0 ? -prepUse : 0),
-                Points_after: pointsAfter,
-                Prepaid_after: prepaidAfter,
-                Balance_after: pointsAfter !== null ? `${pointsAfter} điểm` : (prepaidAfter !== null ? `${Number(prepaidAfter).toLocaleString('vi-VN')} đ` : null)
+                Points_after: snap.pointsAfter,
+                Prepaid_after: snap.prepaidAfter,
+                Balance_after: snap.prepaidAfter !== null ? `${Number(snap.prepaidAfter).toLocaleString('vi-VN')} đ` : (snap.pointsAfter !== null ? `${snap.pointsAfter} điểm` : null)
             };
         });
 
@@ -1086,6 +1476,8 @@ router.get('/my-card', (req, res) => {
             ord.items = itemsStmt.all(ord.Order_id);
         }
 
+        const birthdayInfo = getMemberBirthdayGiftStatus(db, member);
+
         db.close();
 
         return res.json({
@@ -1093,7 +1485,7 @@ router.get('/my-card', (req, res) => {
             member: {
                 ...member,
                 tierInfo: tierMap[member.Current_tier] || tierMap.MAM_SEN || DEFAULT_TIER_CONFIG.MAM_SEN,
-                birthdayInfo: checkBirthdayStatus(member.Birthdate)
+                birthdayInfo
             },
             transactions,
             memberLogs,
@@ -1123,35 +1515,48 @@ router.get('/:id', (req, res) => {
             ORDER BY Transaction_id DESC LIMIT 50
         `).all(memberId);
 
-        let runningPoints = Number(member.Reward_points || 0);
-        let runningPrepaid = Number(member.Prepaid_balance || 0);
+        // Tính toán chính xác số dư sau cùng (Balance after) theo thứ tự thời gian tăng dần
+        const allTxAsc = db.prepare(`
+            SELECT Transaction_id, Points_added, Points_used, Prepaid_added, Prepaid_used 
+            FROM POINT_TRANSACTIONS 
+            WHERE Member_id = ? 
+            ORDER BY Transaction_id ASC
+        `).all(memberId);
+
+        let curPts = 0;
+        let curPrep = 0;
+        const snapshotMap = new Map();
+
+        for (const tx of allTxAsc) {
+            const pAdd = Number(tx.Points_added || 0);
+            const pUse = Number(tx.Points_used || 0);
+            const prAdd = Number(tx.Prepaid_added || 0);
+            const prUse = Number(tx.Prepaid_used || 0);
+
+            if (pAdd > 0 || pUse > 0) curPts = Math.max(0, curPts + pAdd - pUse);
+            if (prAdd > 0 || prUse > 0) curPrep = Math.max(0, curPrep + prAdd - prUse);
+
+            snapshotMap.set(tx.Transaction_id, {
+                pointsAfter: (pAdd > 0 || pUse > 0) ? curPts : null,
+                prepaidAfter: (prAdd > 0 || prUse > 0) ? curPrep : null
+            });
+        }
 
         const transactions = rawTransactions.map(t => {
+            const snap = snapshotMap.get(t.Transaction_id) || { pointsAfter: null, prepaidAfter: null };
             const ptsAdd = Number(t.Points_added || 0);
             const ptsUse = Number(t.Points_used || 0);
             const prepAdd = Number(t.Prepaid_added || 0);
             const prepUse = Number(t.Prepaid_used || 0);
-
-            let pointsAfter = null;
-            let prepaidAfter = null;
-
-            if (ptsAdd > 0 || ptsUse > 0) {
-                pointsAfter = runningPoints;
-                runningPoints = Math.max(0, runningPoints - ptsAdd + ptsUse);
-            }
-            if (prepAdd > 0 || prepUse > 0) {
-                prepaidAfter = runningPrepaid;
-                runningPrepaid = Math.max(0, runningPrepaid - prepAdd + prepUse);
-            }
 
             return {
                 ...t,
                 Transaction_type: t.Type,
                 Points_amount: ptsAdd > 0 ? ptsAdd : ptsUse,
                 Amount_change: prepAdd > 0 ? prepAdd : (prepUse > 0 ? -prepUse : 0),
-                Points_after: pointsAfter,
-                Prepaid_after: prepaidAfter,
-                Balance_after: pointsAfter !== null ? `${pointsAfter} điểm` : (prepaidAfter !== null ? `${Number(prepaidAfter).toLocaleString('vi-VN')} đ` : null)
+                Points_after: snap.pointsAfter,
+                Prepaid_after: snap.prepaidAfter,
+                Balance_after: snap.prepaidAfter !== null ? `${Number(snap.prepaidAfter).toLocaleString('vi-VN')} đ` : (snap.pointsAfter !== null ? `${snap.pointsAfter} điểm` : null)
             };
         });
 
@@ -1185,6 +1590,8 @@ router.get('/:id', (req, res) => {
             ord.items = itemsStmt.all(ord.Order_id);
         }
 
+        const birthdayInfo = getMemberBirthdayGiftStatus(db, member);
+
         db.close();
 
         res.json({
@@ -1192,7 +1599,7 @@ router.get('/:id', (req, res) => {
             member: {
                 ...member,
                 tierInfo: tierMap[member.Current_tier] || tierMap.MAM_SEN || DEFAULT_TIER_CONFIG.MAM_SEN,
-                birthdayInfo: checkBirthdayStatus(member.Birthdate)
+                birthdayInfo
             },
             transactions,
             memberLogs,
@@ -1952,14 +2359,24 @@ router.post('/apply-order-loyalty', (req, res) => {
         db.close();
 
         const io = req.app.get('io');
-        if (io && hasUpgraded) {
-            io.emit('member_tier_upgraded', {
+        if (io) {
+            io.emit('member_balance_updated', {
                 Member_id,
-                Full_name: member.Full_name,
-                Old_tier: member.Current_tier,
-                New_tier: newTier,
-                New_tier_name: tierMap[newTier]?.name || newTier
+                Reward_points: newRewardPoints,
+                Prepaid_balance: newPrepaidBalance,
+                Total_spent: newTotalSpent,
+                Current_tier: newTier
             });
+
+            if (hasUpgraded) {
+                io.emit('member_tier_upgraded', {
+                    Member_id,
+                    Full_name: member.Full_name,
+                    Old_tier: member.Current_tier,
+                    New_tier: newTier,
+                    New_tier_name: tierMap[newTier]?.name || newTier
+                });
+            }
         }
 
         res.json({
@@ -2178,5 +2595,8 @@ module.exports.getTodayLunarInfo = getTodayLunarInfo;
 module.exports.convertSolar2Lunar = convertSolar2Lunar;
 module.exports.calculateTierBySpent = calculateTierBySpent;
 module.exports.checkBirthdayStatus = checkBirthdayStatus;
+module.exports.getMemberBirthdayGiftStatus = getMemberBirthdayGiftStatus;
+module.exports.getBirthdayGiftItemsFromDb = getBirthdayGiftItemsFromDb;
+module.exports.recordOrderBirthdayGift = recordOrderBirthdayGift;
 module.exports.processOrderLoyalty = processOrderLoyalty;
 module.exports.logMemberAction = logMemberAction;

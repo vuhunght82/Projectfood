@@ -1,19 +1,25 @@
-/* Ép khung chứa Danh mục luôn nằm trên 1 HÀNG NGANG duy nhất */
+/* ==========================================================================
+   HỆ THỐNG CSS TỐI ƯU TOÀN DIỆN CHO ĐIỆN THOẠI (MOBILE) & MÁY TÍNH BẢNG (TABLET)
+   - Menu chính đổ dọc từ góc trên bên trái (Hamburger icon fa-bars)
+   - Các thanh menu phụ / nút nằm ngang tự động chuyển sang dạng dọc trên màn hình nhỏ
+   - Tối ưu bố cục thẻ, bảng dữ liệu, biểu mẫu, giỏ hàng, KDS, Sơ đồ bàn và Modal
+   ========================================================================== */
+
+/* 1. THANH CUỘN DANH MỤC MÓN ĂN (GIỮ VUỐT NGANG MƯỢT TRÊN MỌI THIẾT BỊ) */
 #categoryTabs,
 #categoryTabsContainer,
 .menu-category-scroll {
     display: flex !important;
-    flex-wrap: nowrap !important; /* Tuyệt đối KHÔNG cho xuống dòng */
-    overflow-x: auto !important;  /* Cho phép vuốt ngang */
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
     overflow-y: hidden !important;
     white-space: nowrap !important;
     gap: 8px !important;
     padding: 8px 4px !important;
-    -webkit-overflow-scrolling: touch; /* Vuốt mượt trên iPhone */
+    -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
 }
 
-/* Ẩn thanh cuộn xấu xí trên cả Android & iOS */
 #categoryTabsContainer::-webkit-scrollbar,
 .menu-category-scroll::-webkit-scrollbar {
     display: none !important;
@@ -21,13 +27,511 @@
     height: 0 !important;
 }
 
-/* Cố định các nút danh mục không bị co co rúm lại */
 #categoryTabsContainer .btn,
 .menu-category-scroll .btn {
-    flex: 0 0 auto !important; /* Giữ nguyên kích thước nút, không bị bóp nghẹt */
+    flex: 0 0 auto !important;
     white-space: nowrap !important;
     border-radius: 50px !important;
     padding: 6px 14px !important;
     font-size: 13px !important;
     font-weight: 600 !important;
+}
+
+/* 2. MẶC ĐỊNH TRÊN MÀN HÌNH MÁY TÍNH LỚN (DESKTOP > 991.98px) */
+@media (min-width: 992px) {
+    #mobileMenuToggleBtn,
+    #mobileNavUserHeader,
+    #mobileNavBackdrop,
+    .mobile-subtabs-toggle-btn {
+        display: none !important;
+    }
+
+    .nav-tabs:not(.d-none) {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+    }
+}
+
+/* 3. MENU ĐỔ DỌC TỪ GÓC TRÊN BÊN TRÁI TRÊN TABLET & ĐIỆN THOẠI (<= 991.98px) */
+@media (max-width: 991.98px) {
+    /* Header gọn gàng, ghim cố định phía trên cùng */
+    header#mainHeaderBar {
+        padding: 9px 14px !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 10060 !important;
+        min-height: 54px;
+    }
+
+    /* Hiển thị nút 3 gạch (Hamburger) ở góc trên bên trái khi đã đăng nhập */
+    #mobileMenuToggleBtn:not(.d-none) {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.16);
+        border: 1.5px solid rgba(255, 255, 255, 0.4);
+        color: #ffffff;
+        font-size: 18px;
+        flex-shrink: 0;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    #mobileMenuToggleBtn.active {
+        background: rgba(255, 255, 255, 0.3) !important;
+        border-color: #ffffff !important;
+    }
+
+    header h1,
+    #headerBrandTitle {
+        font-size: 1.08rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    #headerBrandLogoImg {
+        width: 28px !important;
+        height: 28px !important;
+        flex-shrink: 0;
+    }
+
+    /* Ẩn thanh tab nằm ngang mặc định trên Tablet & Mobile */
+    .nav-tabs {
+        display: none !important;
+    }
+
+    /* Khi bấm nút dấu gạch góc trên bên trái -> Đổ menu dạng dọc xuống */
+    .nav-tabs.mobile-menu-open:not(.d-none) {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        flex-wrap: nowrap !important;
+        position: fixed !important;
+        top: 54px !important;
+        left: 0 !important;
+        width: 295px !important;
+        max-width: 86vw !important;
+        max-height: calc(100dvh - 54px) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        background: #ffffff !important;
+        padding: 0 0 16px 0 !important;
+        border-right: 1px solid rgba(0, 0, 0, 0.12) !important;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+        border-bottom-right-radius: 16px !important;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.32) !important;
+        z-index: 10055 !important;
+        gap: 0 !important;
+        animation: mobileDropdownSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes mobileDropdownSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Header thông tin tài khoản bên trong menu dọc */
+    .nav-tabs.mobile-menu-open .mobile-nav-user-header {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border-bottom: 1.5px solid #bbf7d0;
+        margin-bottom: 4px;
+    }
+
+    /* Từng nút chức năng xếp dọc rõ ràng, dễ chạm trên cảm ứng */
+    .nav-tabs.mobile-menu-open .tab-btn {
+        width: 100% !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        padding: 12px 18px !important;
+        font-size: 14.5px !important;
+        font-weight: 600 !important;
+        color: #334155 !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+        border-left: 4px solid transparent !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+        white-space: normal !important;
+        line-height: 1.35 !important;
+    }
+
+    .nav-tabs.mobile-menu-open .tab-btn i {
+        width: 22px;
+        text-align: center;
+        font-size: 15px;
+        color: #64748b;
+        flex-shrink: 0;
+    }
+
+    .nav-tabs.mobile-menu-open .tab-btn:hover {
+        background-color: #f8fafc !important;
+        color: var(--primary-color, #2e7d32) !important;
+    }
+
+    .nav-tabs.mobile-menu-open .tab-btn.active {
+        background-color: #ecfdf5 !important;
+        color: var(--primary-color, #2e7d32) !important;
+        border-left-color: var(--primary-color, #2e7d32) !important;
+        border-bottom-color: #e2e8f0 !important;
+        font-weight: 700 !important;
+    }
+
+    .nav-tabs.mobile-menu-open .tab-btn.active i {
+        color: var(--primary-color, #2e7d32) !important;
+    }
+
+    /* Đẩy các huy hiệu đếm số đơn sang sát mép phải của dòng menu dọc */
+    .nav-tabs.mobile-menu-open .tab-btn .badge {
+        margin-left: auto !important;
+    }
+
+    /* ====================================================================
+       MENU PHỤ TRONG TRANG QUẢN LÝ HỆ THỐNG (#systemSettingTabs)
+       Chuyển từ thanh cuộn ngang dài thành nút bấm đổ menu dọc trên Tablet/Mobile
+       ==================================================================== */
+    .mobile-subtabs-toggle-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 10px 14px;
+        background: #ffffff;
+        border: 1.5px solid var(--primary-color, #2e7d32);
+        border-radius: 12px;
+        color: var(--primary-color, #2e7d32);
+        font-size: 13.5px;
+        box-shadow: 0 3px 10px rgba(46, 125, 50, 0.1);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .mobile-subtabs-toggle-btn .toggle-bars-icon {
+        font-size: 16px;
+        background: rgba(46, 125, 50, 0.12);
+        padding: 6px 8px;
+        border-radius: 8px;
+        flex-shrink: 0;
+    }
+
+    .mobile-subtabs-toggle-btn .toggle-chevron-icon {
+        transition: transform 0.22s ease;
+        flex-shrink: 0;
+    }
+
+    .mobile-subtabs-toggle-btn.open .toggle-chevron-icon {
+        transform: rotate(180deg);
+    }
+
+    #systemSettingTabs {
+        display: none !important;
+    }
+
+    #systemSettingTabs.mobile-subtabs-open {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        padding: 8px !important;
+        margin-top: 6px !important;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15) !important;
+        gap: 4px !important;
+        position: relative;
+        z-index: 100;
+    }
+
+    #systemSettingTabs.mobile-subtabs-open > .nav-item {
+        width: 100% !important;
+        margin-right: 0 !important;
+    }
+
+    #systemSettingTabs.mobile-subtabs-open .nav-link {
+        width: 100% !important;
+        text-align: left !important;
+        white-space: normal !important;
+        border-radius: 8px !important;
+        padding: 10px 14px !important;
+        font-size: 13.5px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+}
+
+/* 4. TỐI ƯU RIÊNG CHO MÀN HÌNH MÁY TÍNH BẢNG (TABLET: 768px -> 991.98px) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    #app,
+    .container,
+    .container-fluid {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+
+    /* Lưới món ăn trên Tablet: 3 cột cân đối */
+    #menuCardsGrid,
+    .cards-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 14px !important;
+    }
+
+    /* Các tab phụ trên Tablet cho phép xuống dòng gọn gàng nếu thiếu chỗ */
+    #ordersMainTabs,
+    #tablesMainTabs,
+    #memberTabsNav {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
+    #ordersMainTabs .nav-link,
+    #tablesMainTabs .nav-link,
+    #memberTabsNav .nav-link {
+        padding: 7px 14px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* 5. TỐI ƯU TOÀN DIỆN CHO MÀN HÌNH ĐIỆN THOẠI (MOBILE <= 767.98px) */
+@media (max-width: 767.98px) {
+    /* Thu gọn thông tin user trên thanh Header vì đã có trong Menu dọc */
+    #authNavArea .header-user-info {
+        display: none !important;
+    }
+
+    #authNavArea .header-logout-btn {
+        padding: 5px 10px !important;
+        font-size: 12px !important;
+    }
+
+    /* Khung chứa chính */
+    #app,
+    .container,
+    .container-fluid {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+
+    .card {
+        padding: 12px !important;
+        margin-bottom: 14px !important;
+        border-radius: 12px !important;
+    }
+
+    /* ====================================================================
+       CHUYỂN CÁC MENU NÚT NẰM NGANG SANG DẠNG DỌC TRÊN ĐIỆN THOẠI
+       (#ordersMainTabs, #tablesMainTabs, #memberTabsNav)
+       ==================================================================== */
+    .orders-subtabs-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    #ordersMainTabs,
+    #tablesMainTabs,
+    #memberTabsNav {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        gap: 6px !important;
+        background: #ffffff;
+        padding: 8px !important;
+        border-radius: 12px !important;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    #ordersMainTabs > .nav-item,
+    #tablesMainTabs > .nav-item,
+    #memberTabsNav > .nav-item {
+        width: 100% !important;
+        margin-right: 0 !important;
+    }
+
+    #ordersMainTabs .nav-link,
+    #tablesMainTabs .nav-link,
+    #memberTabsNav .nav-link {
+        width: 100% !important;
+        text-align: left !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        border-radius: 9px !important;
+        padding: 10px 14px !important;
+        font-size: 13.5px !important;
+        white-space: normal !important;
+    }
+
+    #quickChartToggleBtn {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 9px 14px !important;
+        border-radius: 10px !important;
+    }
+
+    /* ====================================================================
+       TRANG ĐƠN HÀNG & NHẬT KÝ (views/orders.html)
+       ==================================================================== */
+    #staffOrdersUserBanner {
+        font-size: 1rem !important;
+        line-height: 1.4;
+    }
+
+    #ordersScopeBtnGroup {
+        flex: 1;
+        display: flex;
+    }
+
+    #ordersScopeBtnGroup .btn {
+        flex: 1;
+        font-size: 12px !important;
+        padding: 6px 8px !important;
+        white-space: nowrap;
+    }
+
+    /* 4 Thẻ KPI Đơn Hàng: Tối ưu hiển thị 2 cột x 2 dòng trên điện thoại */
+    #ordersKpiCardsRow .card {
+        padding: 10px 12px !important;
+    }
+
+    #ordersKpiCardsRow .fs-3 {
+        font-size: 1.25rem !important;
+    }
+
+    #ordersKpiCardsRow .text-uppercase {
+        font-size: 10.5px !important;
+        line-height: 1.25;
+    }
+
+    #ordersKpiCardsRow .rounded-circle {
+        padding: 8px !important;
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    #ordersKpiCardsRow .rounded-circle i {
+        font-size: 14px !important;
+    }
+
+    /* ====================================================================
+       LƯỚI THẺ MÓN ĂN TRÊN ĐIỆN THOẠI (2 CỘT CÂN ĐỐI)
+       ==================================================================== */
+    #menuCardsGrid,
+    .cards-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+    }
+
+    /* ====================================================================
+       BẢNG DỮ LIỆU (TABLES) TRÊN ĐIỆN THOẠI
+       ==================================================================== */
+    .table-responsive {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table th,
+    .table td {
+        padding: 8px 8px !important;
+        font-size: 12.5px !important;
+    }
+
+    /* ====================================================================
+       MODAL HỘP THOẠI TRÊN ĐIỆN THOẠI
+       ==================================================================== */
+    .modal-dialog {
+        margin: 10px auto !important;
+        max-width: calc(100vw - 20px) !important;
+    }
+
+    .modal-content {
+        border-radius: 14px !important;
+    }
+
+    .modal-header,
+    .modal-footer {
+        padding: 10px 14px !important;
+    }
+
+    .modal-body {
+        padding: 12px 14px !important;
+    }
+
+    /* ====================================================================
+       NÚT NỔI (FLOATING ACTION BUTTONS) TRÊN ĐIỆN THOẠI
+       ==================================================================== */
+    .floating-buttons-container.layout-vertical,
+    .floating-buttons-container:not(.layout-horizontal) {
+        bottom: 16px !important;
+        right: 14px !important;
+        gap: 9px !important;
+    }
+
+    .floating-action-btn {
+        width: 42px !important;
+        height: 42px !important;
+        font-size: 16px !important;
+    }
+
+    .floating-cart-btn {
+        width: 52px !important;
+        height: 52px !important;
+        font-size: 21px !important;
+    }
+}
+
+/* 6. TỐI ƯU CHO MÀN HÌNH ĐIỆN THOẠI NHỎ (<= 480px) */
+@media (max-width: 480px) {
+    /* Ẩn chữ "Đăng xuất" chỉ giữ icon để nhường chỗ cho tiêu đề thương hiệu */
+    #authNavArea .header-logout-text {
+        display: none !important;
+    }
+
+    header h1,
+    #headerBrandTitle {
+        font-size: 0.98rem !important;
+    }
+
+    .payment-option {
+        font-size: 12.5px !important;
+        padding: 8px !important;
+    }
+}
+
+/* 7. MÀN HÌNH ĐIỆN THOẠI XOAY NGANG (LANDSCAPE CAO <= 520px) */
+@media (max-height: 520px) and (orientation: landscape) {
+    header#mainHeaderBar {
+        padding: 6px 12px !important;
+        min-height: 46px;
+    }
+
+    .nav-tabs.mobile-menu-open:not(.d-none) {
+        top: 46px !important;
+        max-height: calc(100dvh - 46px) !important;
+    }
+
+    .nav-tabs.mobile-menu-open .tab-btn {
+        padding: 9px 14px !important;
+        font-size: 13px !important;
+    }
 }

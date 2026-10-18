@@ -370,11 +370,18 @@ window.initReadyOrders = async function() {
         window.readyTvScreensaver.init();
     }
 
+    if (!window.socket && typeof io === 'function') {
+        window.socket = io(window.location.origin);
+    }
+
     if (window.socket) {
         // Lắng nghe khi bếp bấm hoàn thành món
         window.socket.off('waiter_order_ready');
         window.socket.on('waiter_order_ready', (data) => {
             playReadyNotificationSound();
+            if (window.Android && typeof window.Android.wakeUp === 'function') {
+                try { window.Android.wakeUp(8); } catch(e) {}
+            }
             if (window.toast) {
                 window.toast.success(`🔔 Bếp vừa làm xong đơn #${data.Order_code || data.Order_id}! Mời bồi bàn nhận món.`);
             }

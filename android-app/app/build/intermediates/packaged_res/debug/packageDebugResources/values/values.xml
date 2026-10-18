@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#ff9800</color>
+    <color name="black">#FF000000</color>
+    <color name="primary">#2e7d32</color>
+    <color name="primary_dark">#1b5e20</color>
+    <color name="white">#FFFFFFFF</color>
+    <string name="app_name">Hoa Sen POS</string>
+    <string name="default_server_url">https://192.168.100.100:3443</string>
+    <style name="Theme.HoaSenPOS" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_dark</item>
+        <item name="colorOnPrimary">@color/white</item>
+        
+        <item name="android:statusBarColor">@color/primary_dark</item>
+        
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+    </style>
+</resources>

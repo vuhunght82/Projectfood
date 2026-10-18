@@ -291,9 +291,16 @@
                 source.connect(gainNode);
                 gainNode.connect(ctx.destination);
                 source.start(0);
+            } else {
+                console.warn('[SoundService] Không thể tải buffer âm thanh, chuyển sang chuông tổng hợp kitchen_bell');
+                SoundSynthesizers.kitchen_bell(ctx, volumeFactor);
             }
         } catch(e) {
-            console.warn('[SoundService] playBufferAudio error:', e);
+            console.warn('[SoundService] playBufferAudio error, fallback to kitchen_bell:', e);
+            try {
+                const ctx = await getAudioContext();
+                if (ctx) SoundSynthesizers.kitchen_bell(ctx, volumeFactor);
+            } catch (err) {}
         }
     }
 

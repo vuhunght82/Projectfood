@@ -351,16 +351,86 @@
                     <!-- KHÁCH HÀNG CÓ SINH NHẬT TRONG TUẦN NÀY -->
                     <div class="col-lg-4 col-12">
                         <div class="p-3 bg-light rounded-4 border h-100">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
                                 <h5 class="fw-bold text-danger m-0"><i class="fa-solid fa-cake-candles me-2"></i>Sinh Nhật Hội Viên Tuần Này</h5>
                                 <span class="badge bg-danger rounded-pill px-2 py-1" id="countUpcomingBirthdays">0</span>
                             </div>
+                            <small class="text-muted d-block mb-2" style="font-size: 11.5px;">
+                                <i class="fa-solid fa-shield-halved text-danger me-1"></i> Giám sát trực tiếp hội viên tuần này <b>Đã tặng</b> hay <b>Chưa nhận quà</b> (Chỉ tặng 1 lần/tuần sinh nhật).
+                            </small>
 
                             <div id="upcomingBirthdaysContainer" class="d-flex flex-column gap-2" style="max-height: 380px; overflow-y: auto;">
                                 <div class="text-center py-4 text-muted">
                                     <i class="fa-solid fa-champagne-glasses fa-2x text-secondary mb-2"></i>
                                     <div>Không có sinh nhật nào trong tuần này.</div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DANH SÁCH MÓN QUÀ TẶNG SINH NHẬT DO QUẢN LÝ LƯU SẴN -->
+                    <div class="col-lg-5 col-12">
+                        <div class="p-3 bg-light rounded-4 border h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <div>
+                                    <h6 class="fw-bold text-dark m-0"><i class="fa-solid fa-gifts me-2 text-danger"></i>Danh Sách Món Quà Sinh Nhật Lưu Sẵn</h6>
+                                    <small class="text-muted" style="font-size: 11px;">Hiển thị trên Giỏ Hàng để nhân viên hỏi khách & chọn đặt (0đ)</small>
+                                </div>
+                                <button class="btn btn-sm btn-danger rounded-pill px-3 fw-bold shadow-sm" onclick="window.openBirthdayGiftItemModal()">
+                                    <i class="fa-solid fa-plus me-1"></i> Thêm Món Quà
+                                </button>
+                            </div>
+
+                            <div class="table-responsive border rounded-3 bg-white">
+                                <table class="table table-hover align-middle m-0 small">
+                                    <thead class="table-light">
+                                        <tr class="text-uppercase text-secondary" style="font-size: 10.5px;">
+                                            <th>Tên Món Quà Sinh Nhật</th>
+                                            <th class="text-end">Giá Tham Chiếu</th>
+                                            <th class="text-center">Trạng Thái</th>
+                                            <th class="text-center" style="width: 80px;">Thao Tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="birthdayGiftItemsTableTbody">
+                                        <tr>
+                                            <td colspan="4" class="text-center py-3 text-muted">Đang tải danh sách món quà...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BẢNG GIÁM SÁT MINH BẠCH LỊCH SỬ TẶNG / NHẬN QUÀ SINH NHẬT -->
+                    <div class="col-lg-7 col-12">
+                        <div class="p-3 bg-light rounded-4 border h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <div>
+                                    <h6 class="fw-bold text-dark m-0"><i class="fa-solid fa-clipboard-check me-2 text-success"></i>Giám Sát Lịch Sử Tặng / Nhận Quà Sinh Nhật</h6>
+                                    <small class="text-muted" style="font-size: 11px;">Minh bạch đã tặng món gì, theo đơn hàng nào, nhân viên nào thực hiện</small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-bold" onclick="window.loadBirthdayGiftSupervisionLogs()">
+                                    <i class="fa-solid fa-arrows-rotate me-1"></i> Làm Mới
+                                </button>
+                            </div>
+
+                            <div class="table-responsive border rounded-3 bg-white" style="max-height: 290px; overflow-y: auto;">
+                                <table class="table table-hover align-middle m-0 small">
+                                    <thead class="table-light sticky-top">
+                                        <tr class="text-uppercase text-secondary" style="font-size: 10.5px;">
+                                            <th>Thời Gian</th>
+                                            <th>Khách Hàng</th>
+                                            <th>Món Quà Đã Tặng (0đ)</th>
+                                            <th>Theo Đơn Hàng</th>
+                                            <th>Nhân Viên</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="birthdayGiftLogsTableTbody">
+                                        <tr>
+                                            <td colspan="5" class="text-center py-3 text-muted">Chưa có lịch sử tặng quà sinh nhật.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -374,12 +444,13 @@
                 <div class="p-3 bg-light rounded-4 border">
                     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                         <div>
-                            <h5 class="fw-bold text-dark m-0"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Nhật Ký Biến Động Hạng & Điểm Thưởng</h5>
-                            <small class="text-muted">Ghi nhận minh bạch mọi thao tác thăng hạng, đổi hạng, sửa chi tiêu, điều chỉnh điểm & nạp ví</small>
+                            <h5 class="fw-bold text-dark m-0"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>Nhật Ký Biến Động Hạng, Điểm Thưởng & Quà Sinh Nhật</h5>
+                            <small class="text-muted">Ghi nhận minh bạch mọi thao tác tặng quà sinh nhật, thăng hạng, đổi hạng, sửa chi tiêu, điều chỉnh điểm & nạp ví</small>
                         </div>
                         <div class="d-flex gap-2 align-items-center">
-                            <select id="logActionFilterSelect" class="form-select form-select-sm fw-semibold" style="width: 200px;" onchange="window.filterMemberLogs(this.value)">
+                            <select id="logActionFilterSelect" class="form-select form-select-sm fw-semibold" style="width: 220px;" onchange="window.filterMemberLogs(this.value)">
                                 <option value="ALL">-- Tất cả loại nhật ký --</option>
+                                <option value="BIRTHDAY_GIFT">🎂 Tặng Quà Sinh Nhật</option>
                                 <option value="TIER_MANUAL_CHANGE">⭐ Thăng/Đổi Hạng Thủ Công</option>
                                 <option value="TIER_UPGRADE_AUTO">🚀 Tự Động Thăng Hạng</option>
                                 <option value="SPENT_ADJUST">💰 Điều Chỉnh Chi Tiêu</option>
@@ -575,6 +646,14 @@
                         <img id="cardQrImg" src="" alt="QR Hội viên" class="img-fluid rounded border shadow-sm p-1" style="width: 140px; height: 140px; object-fit: contain;">
                     </div>
                     <small class="text-muted">Đưa mã này cho nhân viên hoặc thu ngân để tự động áp dụng ưu đãi giảm giá.</small>
+                </div>
+
+                <!-- LỊCH SỬ NHẬN QUÀ TẶNG SINH NHẬT TRONG TÀI KHOẢN KHÁCH HÀNG -->
+                <div class="card border-0 rounded-3 shadow-sm bg-white p-3 mb-3">
+                    <div class="fw-bold text-danger mb-2 small"><i class="fa-solid fa-cake-candles me-1"></i>Lịch Sử Nhận Quà Tặng Sinh Nhật (Minh Bạch Đơn Hàng)</div>
+                    <div id="cardBirthdayGiftsList" style="max-height: 150px; overflow-y: auto;">
+                        <small class="text-muted">Chưa có lịch sử nhận quà sinh nhật.</small>
+                    </div>
                 </div>
 
                 <!-- LỊCH SỬ GIAO DỊCH GẦN ĐÂY -->
@@ -1005,3 +1084,58 @@
         </div>
     </div>
 </div>
+
+<!-- ======================================================== -->
+<!-- MODAL 10: QUẢN LÝ MÓN QUÀ TẶNG SINH NHẬT LƯU SẴN          -->
+<!-- ======================================================== -->
+<div class="modal fade" id="birthdayGiftItemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
+            <div class="modal-header bg-danger text-white py-3">
+                <h5 class="modal-title fw-bold fs-6" id="birthdayGiftItemModalTitle">
+                    <i class="fa-solid fa-gift me-2"></i>Thêm Món Quà Tặng Sinh Nhật
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="window.closeMemberModal('birthdayGiftItemModal')"></button>
+            </div>
+            <form id="birthdayGiftItemForm" onsubmit="window.saveBirthdayGiftItem(event)">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="editBdayGiftId" value="">
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Tên món quà tặng sinh nhật: <span class="text-danger">*</span></label>
+                        <input type="text" id="editBdayGiftName" class="form-control fw-bold" placeholder="VD: Đĩa trái cây tráng miệng tươi mát, Kem thuần chay, Chè ngọt..." required>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Giá trị tham chiếu (VNĐ):</label>
+                            <input type="number" id="editBdayGiftRefPrice" class="form-control fw-bold text-end text-danger" min="0" step="1000" value="45000" placeholder="45000">
+                            <small class="text-muted" style="font-size: 11px;">Khi đặt vào đơn sẽ tự động tính <b>0đ</b></small>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-secondary">Thứ tự hiển thị:</label>
+                            <input type="number" id="editBdayGiftSort" class="form-control text-center" value="1" min="1">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Mô tả / Ghi chú phục vụ:</label>
+                        <input type="text" id="editBdayGiftDesc" class="form-control" placeholder="VD: Phần tráng miệng đặc biệt tri ân hội viên dịp sinh nhật">
+                    </div>
+
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="editBdayGiftActive" checked>
+                        <label class="form-check-label small fw-bold text-dark" for="editBdayGiftActive">Cho phép hiển thị trên Giỏ Hàng để nhân viên chọn</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal" onclick="window.closeMemberModal('birthdayGiftItemModal')">Hủy</button>
+                    <button type="submit" class="btn btn-danger fw-bold rounded-pill px-4 shadow-sm">
+                        <i class="fa-solid fa-save me-1"></i> Lưu Món Quà
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

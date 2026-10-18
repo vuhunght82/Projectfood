@@ -4,7 +4,17 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const db = new Database(path.join(__dirname, '../database.db'));
 const DB_PATH = path.join(__dirname, '../database.db');
-const { processOrderLoyalty } = require('./members');
+const { processOrderLoyalty, recordOrderBirthdayGift } = require('./members');
+
+function getItemPrice(item) {
+    if (!item) return 35000;
+    if (item.isBirthdayGift || item.Is_birthday_gift || String(item.name || item.Item_name || '').includes('[Quà Sinh Nhật')) {
+        return 0;
+    }
+    if (item.price !== undefined && item.price !== null && item.price !== '') return Number(item.price);
+    if (item.Unit_price !== undefined && item.Unit_price !== null && item.Unit_price !== '') return Number(item.Unit_price);
+    return 35000;
+}
 
 // GET: Lấy danh sách tất cả đơn hàng
 router.get('/', (req, res) => {
@@ -115,7 +125,7 @@ router.post('/', (req, res) => {
         let calculatedTotal = 0;
         if (Array.isArray(items)) {
             calculatedTotal = items.reduce((sum, item) => {
-                const price = Number(item.price || item.Unit_price || 35000);
+                const price = getItemPrice(item);
                 const qty = Number(item.quantity || item.Quantity || 1);
                 return sum + (price * qty);
             }, 0);
@@ -129,8 +139,15 @@ router.post('/', (req, res) => {
             const codeWithPrefix = cleanCode.startsWith('CHAY-') ? cleanCode : ('CHAY-' + cleanCode);
             const codeWithoutPrefix = cleanCode.replace('CHAY-', '');
 
-            // 1. TÌM ID CỦA ĐƠN HÀNG TRONG CSDL
-            const targetOrder = db.prepare(`SELECT Order_id FROM ORDERS WHERE Order_code = ? OR Order_code = ? OR Order_id = ?`).get(codeWithPrefix, cleanCode, cleanCode);
+            // 1. TÌM ID & KIỂM TRA KHÓA SỬA ĐƠN CỦA ĐƠN HÀNG TRONG CSDL
+            const targetOrder = db.prepare(`SELECT Order_id, Status, Payment_status, Cancel_role, Member_id, Member_phone FROM ORDERS WHERE Order_code = ? OR Order_code = ? OR Order_code = ? OR Order_id = ?`).get(codeWithPrefix, cleanCode, codeWithoutPrefix, cleanCode);
+            if (targetOrder) {
+                const st = String(targetOrder.Status || '').toUpperCase();
+                const paid = String(targetOrder.Payment_status || '').toUpperCase() === 'PAID';
+                if (paid || ['COMPLETED', 'DONE', 'FINISHED', 'SERVED', 'CANCELED', 'CANCELLED'].includes(st) || Boolean(targetOrder.Cancel_role)) {
+                    return res.status(400).json({ success: false, error: 'Đơn hàng đã hoàn tất / đã thu tiền / đã hủy, không thể sửa.' });
+                }
+            }
             const targetId = targetOrder ? targetOrder.Order_id : cleanCode;
 
             // 2. LẤY NỘI DUNG CŨ TỪ BẢNG ORDER_DETAILS LƯU DẠNG JSON
@@ -140,26 +157,30 @@ router.post('/', (req, res) => {
             // 3. THỰC HIỆN UPDATE ĐƠN HÀNG
             const stmtUpdate = db.prepare(`
                 UPDATE ORDERS 
-                SET Table_number = ?, Order_type = ?, Customer_name = ?, Payment_method = ?, Final_amount = ?, Note = ?, Is_edited = 1 
+                SET Table_number = ?, Order_type = ?, Customer_name = ?, Payment_method = ?, Total_amount = ?, Final_amount = ?, Note = ?, Is_edited = 1 
                 WHERE Order_code = ? OR Order_code = ? OR Order_code = ? OR Order_id = ?
             `);
 
             stmtUpdate.run(
                 tableName, Order_type || 'DINE_IN', Customer_name || 'Khách vãng lai', 
-                Payment_method || 'CASH', finalTotal, Note || '', 
+                Payment_method || 'CASH', calculatedTotal, finalTotal, Note || '', 
                 codeWithPrefix, cleanCode, codeWithoutPrefix, cleanCode
             );
 
             // 4. GHI NHẬT KÝ VÀO ORDER_LOGS DẠNG JSON CHO CẢ NỘI DUNG MỚI
             try {
-                const newItemsPayload = Array.isArray(items) && items.length > 0 ? items.map(i => ({
-                    Item_name: i.name || i.Item_name || 'Món chay',
-                    Quantity: Number(i.quantity || i.Quantity || 1),
-                    Unit_price: Number(i.price || i.Unit_price || 35000),
-                    Total_price: Number(i.quantity || i.Quantity || 1) * Number(i.price || i.Unit_price || 35000),
-                    Note: i.note || i.Note || '',
-                    Toppings: typeof i.toppings === 'string' ? i.toppings : (Array.isArray(i.toppings) ? (i.toppings.map(t => `${t.name} (+${Number(t.price).toLocaleString()}đ)`).join(', ')) : '')
-                })) : [];
+                const newItemsPayload = Array.isArray(items) && items.length > 0 ? items.map(i => {
+                    const uPrice = getItemPrice(i);
+                    const uQty = Number(i.quantity || i.Quantity || 1);
+                    return {
+                        Item_name: i.name || i.Item_name || 'Món chay',
+                        Quantity: uQty,
+                        Unit_price: uPrice,
+                        Total_price: uQty * uPrice,
+                        Note: i.note || i.Note || '',
+                        Toppings: typeof i.toppings === 'string' ? i.toppings : (Array.isArray(i.toppings) ? (i.toppings.map(t => `${t.name} (+${Number(t.price).toLocaleString()}đ)`).join(', ')) : '')
+                    };
+                }) : [];
                 const newContentStr = JSON.stringify(newItemsPayload);
 
                 const stmtLog = db.prepare(`
@@ -182,12 +203,29 @@ router.post('/', (req, res) => {
             if (Array.isArray(items) && items.length > 0) {
                 const stmtDetail = db.prepare(`INSERT INTO ORDER_DETAILS (Order_id, Item_name, Quantity, Unit_price, Total_price, Note, Toppings) VALUES (?, ?, ?, ?, ?, ?, ?)`);
                 items.forEach(i => {
-                    const price = Number(i.price || i.Unit_price || 35000);
+                    const price = getItemPrice(i);
                     const qty = Number(i.quantity || i.Quantity || 1);
                     const itemNote = i.note || i.Note || '';
                     const itemToppings = typeof i.toppings === 'string' ? i.toppings : (Array.isArray(i.toppings) ? (i.toppings.map(t => `${t.name} (+${Number(t.price).toLocaleString()}đ)`).join(', ')) : '');
                     stmtDetail.run(targetId, i.name || i.Item_name || 'Món chay', qty, price, qty * price, itemNote, itemToppings);
                 });
+            }
+
+            // Ghi nhận quà tặng sinh nhật nếu có trong đơn sửa
+            try {
+                const ioObj = req.app.get('io');
+                recordOrderBirthdayGift(db, {
+                    orderId: targetId,
+                    orderCode: codeWithPrefix,
+                    tableName,
+                    memberId: req.body.Member_id || (targetOrder ? targetOrder.Member_id : null),
+                    memberPhone: req.body.Member_phone || (targetOrder ? targetOrder.Member_phone : null),
+                    items,
+                    staffName: Staff_name || Paid_by || 'Nhân viên',
+                    io: ioObj
+                });
+            } catch (bdayErr) {
+                console.warn('Lưu ý quà sinh nhật (sửa đơn):', bdayErr.message);
             }
 
             // Cập nhật thông tin bàn ăn nếu có bàn
@@ -205,7 +243,7 @@ router.post('/', (req, res) => {
                 }
             }
 
-            // 🌟 5.1. BẮT BUỘC BẮN SOCKET BÁO BẾP KHI CÓ ĐƠN ĐƯỢC SỬA
+            // 🌟 5.1. BẮT BUỘC BẮN SOCKET BÁO BẾP & TOÀN HỆ THỐNG KHI CÓ ĐƠN ĐƯỢC SỬA
             const io = req.app.get('io');
             if (io) {
                 io.emit('kitchen_new_order', { 
@@ -220,6 +258,13 @@ router.post('/', (req, res) => {
                     Created_at: new Date().toLocaleString('vi-VN')
                 });
                 io.emit('table_updated', { Table_name: tableName, Current_amount: finalTotal });
+                io.emit('tables_list_changed');
+                io.emit('order_status_updated', {
+                    Order_id: targetId,
+                    Order_code: codeWithPrefix,
+                    Final_amount: finalTotal,
+                    Is_edited: 1
+                });
                 emitOrderBadgeCounts(io, db);
             }
 
@@ -318,13 +363,30 @@ router.post('/', (req, res) => {
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 `);
                 items.forEach(i => {
-                    const price = Number(i.price || i.Unit_price || 35000);
+                    const price = getItemPrice(i);
                     const qty = Number(i.quantity || i.Quantity || 1);
                     const rawNote = i.note || i.Note || '';
                     const taggedNote = rawNote ? `${rawNote} [Gọi thêm]` : `[Gọi thêm]`;
                     const itemToppings = typeof i.toppings === 'string' ? i.toppings : (Array.isArray(i.toppings) ? (i.toppings.map(t => `${t.name} (+${Number(t.price).toLocaleString()}đ)`).join(', ')) : '');
                     stmtDetail.run(targetOrderId, i.name || i.Item_name || 'Món chay', qty, price, qty * price, taggedNote, itemToppings);
                 });
+            }
+
+            // Ghi nhận quà tặng sinh nhật nếu có trong món gọi thêm
+            try {
+                const ioObj = req.app.get('io');
+                recordOrderBirthdayGift(db, {
+                    orderId: targetOrderId,
+                    orderCode: targetOrderCode,
+                    tableName,
+                    memberId: req.body.Member_id || activeOrder.Member_id,
+                    memberPhone: req.body.Member_phone || activeOrder.Member_phone || activeOrder.Customer_phone,
+                    items,
+                    staffName: Staff_name || Paid_by || 'Nhân viên',
+                    io: ioObj
+                });
+            } catch (bdayErr) {
+                console.warn('Lưu ý quà sinh nhật (gọi thêm):', bdayErr.message);
             }
 
             // 5. Cập nhật ORDERS
@@ -460,14 +522,14 @@ router.post('/', (req, res) => {
             const stmtOrder = db.prepare(`
                 INSERT INTO ORDERS (
                     Order_code, Order_type, Table_number, Customer_name, Payment_method, 
-                    Payment_status, Paid_by, Paid_at, Final_amount, Note, Status, 
+                    Payment_status, Paid_by, Paid_at, Total_amount, Final_amount, Note, Status, 
                     Is_edited, Staff_name, Created_by, Delivery_platform, Customer_phone, 
                     Delivery_address, Payment_type, Shipping_fee,
                     Member_id, Member_phone, Member_name, Member_tier,
                     Discount_percent, Discount_amount, Points_used, Points_amount, Points_earned, Prepaid_used,
                     Voucher_code, Voucher_discount
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ${isPaid ? "datetime('now', 'localtime')" : "NULL"}, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ${isPaid ? "datetime('now', 'localtime')" : "NULL"}, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
             const finalCustomerName = (memberName && memberName.trim() && memberName !== 'Khách vãng lai') 
                 ? memberName.trim() 
@@ -475,7 +537,7 @@ router.post('/', (req, res) => {
 
             const info = stmtOrder.run(
                 orderCode, finalOrderType, tableName, finalCustomerName, Payment_method || 'CASH', 
-                paymentStat, paidUser, finalTotal, Note || '', initialStatus, staffCreator, staffCreator,
+                paymentStat, paidUser, calculatedTotal, finalTotal, Note || '', initialStatus, staffCreator, staffCreator,
                 deliveryPlatform, customerPhone, deliveryAddress, paymentType, shippingFee,
                 memberId, memberPhone, memberName || finalCustomerName, memberTier,
                 discountPercent, discountAmount, pointsUsed, pointsAmount, pointsEarned, prepaidUsed,
@@ -509,12 +571,31 @@ router.post('/', (req, res) => {
             if (Array.isArray(items) && items.length > 0) {
                 const stmtDetail = db.prepare(`INSERT INTO ORDER_DETAILS (Order_id, Item_name, Quantity, Unit_price, Total_price, Note, Toppings) VALUES (?, ?, ?, ?, ?, ?, ?)`);
                 items.forEach(i => {
-                    const price = Number(i.price || i.Unit_price || 35000);
+                    const price = getItemPrice(i);
                     const qty = Number(i.quantity || i.Quantity || 1);
                     const itemNote = i.note || i.Note || '';
                     const itemToppings = typeof i.toppings === 'string' ? i.toppings : (Array.isArray(i.toppings) ? (i.toppings.map(t => `${t.name} (+${Number(t.price).toLocaleString()}đ)`).join(', ')) : '');
                     stmtDetail.run(newOrderId, i.name || i.Item_name || 'Món chay', qty, price, qty * price, itemNote, itemToppings);
                 });
+            }
+
+            // Ghi nhận quà tặng sinh nhật hội viên nếu có trong đơn hàng mới
+            if (memberId || memberPhone) {
+                try {
+                    const ioObj = req.app.get('io');
+                    recordOrderBirthdayGift(db, {
+                        orderId: newOrderId,
+                        orderCode: orderCode,
+                        tableName,
+                        memberId,
+                        memberPhone,
+                        items,
+                        staffName: staffCreator,
+                        io: ioObj
+                    });
+                } catch (bdayErr) {
+                    console.warn('Lưu ý quà sinh nhật (đơn mới):', bdayErr.message);
+                }
             }
 
             // Ghi nhật ký KPI nếu thu tiền mặt ngay

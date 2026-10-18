@@ -1,6 +1,6 @@
 <div class="container-fluid py-3">
     <!-- TIÊU ĐỀ & NÚT LƯU CẤU HÌNH -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <h4 class="text-success fw-bold m-0 fs-5">
             <i class="fa-solid fa-gears me-2"></i>Cấu Hình Quản Lý Hệ Thống
         </h4>
@@ -9,8 +9,15 @@
         </button>
     </div>
 
-    <!-- THANH NÚT CHUYỂN TAB CẤU HÌNH -->
-    <div class="position-relative mb-3">
+    <!-- THANH NÚT CHUYỂN TAB CẤU HÌNH (HỖ TRỢ ĐỔ MENU DỌC TRÊN ĐIỆN THOẠI/TABLET) -->
+    <div class="position-relative mb-3 sys-tabs-wrapper">
+        <button type="button" id="mobileSysTabsToggleBtn" class="mobile-subtabs-toggle-btn" onclick="window.toggleMobileSubTabs('systemSettingTabs', this)">
+            <span class="d-flex align-items-center gap-2 text-truncate">
+                <i class="fa-solid fa-bars toggle-bars-icon"></i>
+                <span id="mobileSysCurrentTabLabel" class="fw-bold text-truncate">b. Máy In, Thanh Toán, Màn Hình Bếp & Âm Thanh</span>
+            </span>
+            <i class="fa-solid fa-chevron-down toggle-chevron-icon ms-2"></i>
+        </button>
         <ul class="nav nav-pills flex-nowrap overflow-auto py-2 px-1 rounded-3 bg-light border shadow-sm" id="systemSettingTabs" style="white-space: nowrap; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;">
             <li class="nav-item me-2 flex-shrink-0">
                 <button class="nav-link rounded-pill fw-bold" id="tab-roles-btn" type="button" onclick="window.switchSystemTab('tab-roles')">
@@ -365,9 +372,47 @@
                         </div>
                         <div class="card-body p-3">
 
+                            <!-- HƯỚNG DẪN NHANH CHO TABLET ANDROID + MÁY IN IP LAN 9100 -->
+                            <div class="alert alert-warning border border-warning rounded-3 p-3 mb-3 shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <div class="fw-bold text-dark">
+                                        <i class="fa-solid fa-tablet-screen-button text-danger me-1"></i>
+                                        Đang dùng <b>Tablet Android (Trình duyệt Chrome)</b> kết nối <b>Máy In Bill IP (LAN)</b>?
+                                    </div>
+                                    <button class="btn btn-sm btn-dark fw-bold rounded-pill px-3" type="button" onclick="window.toggleAndroidPrinterGuide()">
+                                        <i class="fa-solid fa-circle-question me-1 text-warning"></i> Xem 3 Bước Cài Đặt Để Ra Giấy Ngay
+                                    </button>
+                                </div>
+                                <div id="androidPrinterSetupGuideBox" class="mt-2 pt-2 border-top border-warning-subtle small text-dark">
+                                    <div class="mb-2 text-secondary">
+                                        <b>Vì sao cần cầu nối trên Android?</b> Mặc định trình duyệt Chrome trên Android bị chặn cổng mạng thô <code>9100</code> (ESC/POS) và chỉ tìm máy in văn phòng. Để Tablet Android bắn lệnh qua Wi-Fi ra thẳng Máy In Bill IP của quán (in Tiếng Việt có dấu, bảng biểu & Mã QR VietQR), bạn chỉ cần làm <b>1 lần duy nhất (2 phút)</b> trên Tablet:
+                                    </div>
+                                    <ol class="mb-2 ps-3">
+                                        <li class="mb-1">
+                                            Trên Tablet Android, mở <b>CH Play (Google Play)</b> tải ứng dụng miễn phí <b>RawBT Print Service</b> (hoặc <b>ESC POS Wifi Print Service</b>).
+                                        </li>
+                                        <li class="mb-1">
+                                            Mở ứng dụng <b>RawBT</b> <i class="fa-solid fa-arrow-right mx-1 text-muted"></i> vào <b>Settings (Cấu hình)</b>:
+                                            <ul class="mb-1 ps-3">
+                                                <li><b>Connection method (Phương thức kết nối):</b> Chọn <b>WiFi / Ethernet (LAN)</b>.</li>
+                                                <li><b>IP Address & Port:</b> Nhập đúng <b>IP của máy in bill</b> (ví dụ <code>192.168.1.200</code>) và Port <code>9100</code> <i class="fa-solid fa-arrow-right mx-1 text-muted"></i> Bấm <b>Save / Test</b>.</li>
+                                                <li>Bật công tắc <b>Print Service (Dịch vụ in hệ thống Android)</b> trong ứng dụng.</li>
+                                            </ul>
+                                        </li>
+                                        <li class="mb-0">
+                                            Quay lại trang Web này trên Chrome <i class="fa-solid fa-arrow-right mx-1 text-muted"></i> bấm nút <b>Test In Bếp</b> hoặc <b>In Bill</b>:
+                                            <ul class="mb-0 ps-3">
+                                                <li>Nếu dùng <b>Hộp thoại In Android</b>: Ở góc trên hộp thoại in hiện ra, chọn máy in <b>"RawBT"</b> (chỉ chọn 1 lần đầu, Chrome sẽ tự nhớ cho mọi lần sau) rồi bấm nút <b>In</b>.</li>
+                                                <li>Nếu muốn <b>In 1-Chạm Không Hiện Hộp Thoại</b>: Chọn cổng kết nối bên dưới là <b>"⚡ In 1-Chạm Tablet Android (RawBT)"</b>!</li>
+                                            </ul>
+                                        </li>
+                                    </ol>
+                                </div>
+                            </div>
+
                             <!-- KHỐI A: MÁY IN BẾP (KITCHEN TICKET PRINTER) -->
                             <div class="p-3 bg-light rounded-3 mb-3 border border-start border-4 border-danger">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                                     <h6 class="fw-bold text-danger m-0">
                                         <i class="fa-solid fa-utensils me-1"></i> A. Máy In Phiếu Chế Biến Bếp (Kitchen Printer)
                                     </h6>
@@ -377,13 +422,14 @@
                                     </div>
                                 </div>
                                 <p class="text-muted small mb-2">
-                                    Máy in đặt riêng trong khu vực Bếp, tự động in phiếu chế biến (Chỉ in tên món, số lượng to rõ, topping, ghi chú - không in tiền/QR) ngay khi có bàn gọi món hoặc gọi thêm món.
+                                    Máy in đặt trong Bếp hoặc dùng chung với quầy Thu Ngân, tự động in phiếu chế biến (tên món, số lượng to rõ, ghi chú).
                                 </p>
                                 <div class="row g-2 mb-2">
                                     <div class="col-md-7">
-                                        <label class="form-label small fw-bold text-secondary">Cổng kết nối máy in Bếp</label>
+                                        <label class="form-label small fw-bold text-secondary">Chế độ kết nối máy in Bếp</label>
                                         <select class="form-select form-select-sm" id="sysKitchenPrinterSelect" onchange="window.handleKitchenPrinterTypeChange()">
-                                            <option value="LAN">Mạng LAN / IP (Máy in cổng Ethernet / Wifi Bếp)</option>
+                                            <option value="LAN">Mạng LAN / IP (In đầy đủ Tiếng Việt + QR qua Android Print / Cổng 9100)</option>
+                                            <option value="RAWBT_DIRECT">⚡ In 1-Chạm Tablet Android (Gửi thẳng qua RawBT không hiện hộp thoại)</option>
                                             <option value="BLUETOOTH">Bluetooth (Máy in di động POS Bếp)</option>
                                             <option value="BROWSER">Cổng USB / Trình Duyệt Bếp (Hộp thoại In)</option>
                                         </select>
@@ -398,21 +444,26 @@
                                 </div>
                                 <!-- Ô nhập IP máy in Bếp LAN -->
                                 <div id="sysKitchenPrinterIpBox" class="mb-0">
-                                    <label class="form-label small fw-bold text-secondary">Địa chỉ IP Máy In Bếp (LAN/Ethernet)</label>
-                                    <div class="input-group input-group-sm">
-                                        <span class="input-group-text"><i class="fa-solid fa-server text-danger"></i></span>
-                                        <input type="text" class="form-control" id="sysKitchenPrinterIpInput" placeholder="Ví dụ: 192.168.1.201:9100" value="192.168.1.201:9100">
-                                        <button class="btn btn-outline-danger fw-bold" type="button" onclick="window.testKitchenPrinterIpConnection()">
-                                            <i class="fa-solid fa-plug"></i> Test In Bếp
+                                    <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+                                        <label class="form-label small fw-bold text-secondary m-0">Địa chỉ IP Máy In Bếp (LAN/Ethernet)</label>
+                                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold text-primary" style="font-size: 11.5px;" onclick="window.syncPrinterIpBetweenKitchenAndCashier('FROM_KITCHEN')">
+                                            <i class="fa-solid fa-copy me-1"></i>Dùng chung IP này cho cả Máy In Thu Ngân (Khi quán có 1 máy in)
                                         </button>
                                     </div>
-                                    <small class="text-muted" style="font-size: 11px;">Máy in Bếp đặt trong khu vực chế biến, giúp đầu bếp nhận phiếu ngay không cần chạy lên thu ngân.</small>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text"><i class="fa-solid fa-server text-danger"></i></span>
+                                        <input type="text" class="form-control fw-bold font-monospace" id="sysKitchenPrinterIpInput" placeholder="Ví dụ: 192.168.1.200:9100" value="192.168.1.201:9100">
+                                        <button class="btn btn-danger fw-bold px-3" type="button" onclick="window.testKitchenPrinterIpConnection()">
+                                            <i class="fa-solid fa-print me-1"></i> Test In Bếp Ngay
+                                        </button>
+                                    </div>
+                                    <small class="text-muted" style="font-size: 11px;">Nếu chỉ nhập IP (VD: <code>192.168.1.200</code>), hệ thống tự động nhận cổng chuẩn <code>9100</code>.</small>
                                 </div>
                             </div>
 
                             <!-- KHỐI B: MÁY IN HÓA ĐƠN THANH TOÁN (RECEIPT PRINTER) -->
                             <div class="p-3 bg-light rounded-3 mb-3 border border-start border-4 border-success">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                                     <h6 class="fw-bold text-success m-0">
                                         <i class="fa-solid fa-receipt me-1"></i> B. Máy In Hóa Đơn Thanh Toán (Thu Ngân / Quầy Bar)
                                     </h6>
@@ -422,13 +473,14 @@
                                     </div>
                                 </div>
                                 <p class="text-muted small mb-2">
-                                    Máy in đặt tại quầy thu ngân, in đầy đủ thông tin nhà hàng, chi tiết đơn giá, giảm giá, thuế VAT và mã QR chuyển khoản VietQR khi khách thanh toán.
+                                    Máy in hóa đơn tính tiền cho khách, in đầy đủ thông tin nhà hàng, chi tiết món, giảm giá, thuế VAT và mã QR chuyển khoản VietQR.
                                 </p>
                                 <div class="row g-2 mb-2">
                                     <div class="col-md-7">
-                                        <label class="form-label small fw-bold text-secondary">Cổng kết nối máy in Thu Ngân</label>
+                                        <label class="form-label small fw-bold text-secondary">Chế độ kết nối máy in Thu Ngân</label>
                                         <select class="form-select form-select-sm" id="sysPrinterSelect" onchange="window.handlePrinterTypeChange()">
-                                            <option value="LAN">Mạng LAN / IP (Máy in cổng Ethernet / Wifi Quầy)</option>
+                                            <option value="LAN">Mạng LAN / IP (In đầy đủ Tiếng Việt + QR qua Android Print / Cổng 9100)</option>
+                                            <option value="RAWBT_DIRECT">⚡ In 1-Chạm Tablet Android (Gửi thẳng qua RawBT không hiện hộp thoại)</option>
                                             <option value="BLUETOOTH">Bluetooth (Máy in di động POS-58 / POS-80)</option>
                                             <option value="BROWSER">Cổng USB / Trình Duyệt (System Dialog)</option>
                                         </select>
@@ -444,15 +496,20 @@
                                 </div>
                                 <!-- Ô nhập IP máy in Thu Ngân LAN -->
                                 <div id="sysPrinterIpBox" class="mb-0">
-                                    <label class="form-label small fw-bold text-secondary">Địa chỉ IP Máy In Thu Ngân (Kèm Cổng)</label>
-                                    <div class="input-group input-group-sm">
-                                        <span class="input-group-text"><i class="fa-solid fa-server text-success"></i></span>
-                                        <input type="text" class="form-control" id="sysPrinterIpInput" placeholder="Ví dụ: 192.168.1.200:9100" value="192.168.1.200:9100">
-                                        <button class="btn btn-outline-success fw-bold" type="button" onclick="window.testPrinterIpConnection()">
-                                            <i class="fa-solid fa-plug"></i> Test In Thu Ngân
+                                    <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+                                        <label class="form-label small fw-bold text-secondary m-0">Địa chỉ IP Máy In Thu Ngân (Kèm Cổng)</label>
+                                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold text-success" style="font-size: 11.5px;" onclick="window.syncPrinterIpBetweenKitchenAndCashier('FROM_CASHIER')">
+                                            <i class="fa-solid fa-copy me-1"></i>Dùng chung IP này cho cả Máy In Bếp
                                         </button>
                                     </div>
-                                    <small class="text-muted" style="font-size: 11px;">Cổng in nhiệt chuẩn thông thường là 9100.</small>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text"><i class="fa-solid fa-server text-success"></i></span>
+                                        <input type="text" class="form-control fw-bold font-monospace" id="sysPrinterIpInput" placeholder="Ví dụ: 192.168.1.200:9100" value="192.168.1.200:9100">
+                                        <button class="btn btn-success fw-bold px-3" type="button" onclick="window.testPrinterIpConnection()">
+                                            <i class="fa-solid fa-print me-1"></i> Test In Thu Ngân Ngay
+                                        </button>
+                                    </div>
+                                    <small class="text-muted" style="font-size: 11px;">Cổng in nhiệt chuẩn thông thường là <code>9100</code> (VD: <code>192.168.1.200:9100</code>).</small>
                                 </div>
                             </div>
 

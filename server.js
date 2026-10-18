@@ -700,6 +700,32 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/sw.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'sw.js')));
 
+// Phục vụ trực tiếp file socket.io.js an toàn cho cả HTTP & HTTPS
+app.get(['/socket.io/socket.io.js', '/socket.io/socket.io.min.js'], (req, res) => {
+    let clientPath = path.join(__dirname, 'public', 'socket.io.js');
+    if (!fs.existsSync(clientPath)) {
+        try {
+            clientPath = path.join(path.dirname(require.resolve('socket.io')), '..', 'client-dist', 'socket.io.min.js');
+        } catch (e) {}
+    }
+    if (fs.existsSync(clientPath)) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return fs.createReadStream(clientPath).pipe(res);
+    }
+    res.status(404).send('socket.io client not found');
+});
+
+// Cho phép điện thoại tải file APK trực tiếp qua trình duyệt cùng mạng WiFi
+app.get(['/download-apk', '/HoaSenPOS.apk', '/app.apk'], (req, res) => {
+    const apkPath = path.join(__dirname, 'HoaSenPOS.apk');
+    if (fs.existsSync(apkPath)) {
+        res.download(apkPath, 'HoaSenPOS.apk');
+    } else {
+        res.status(404).send('Chưa tìm thấy file APK trên máy chủ.');
+    }
+});
+
 // Hỗ trợ tải giao diện cài đặt hệ thống ở mọi định dạng URL (tránh lỗi fetch 404 / connection refused)
 // Hỗ trợ tải giao diện cài đặt hệ thống ở mọi định dạng URL (tránh lỗi fetch 404 / connection refused)
 // Chỉ khi nào code front-end yêu cầu đường dẫn /views/... thì mới trả về file giao diện con
@@ -1743,6 +1769,423 @@ app.post('/api/system-config/upload-logo', systemUpload.single('logoImage'), (re
     }
 });
 
+// ==========================================
+// 5.1. ENGINE IN NHIỆT ESC/POS QUA MẠNG LAN TCP (PORT 9100) & CẦU NỐI RAWBT ANDROID
+// ==========================================
+const net = require('net');
+
+function removeVietnameseTonesForEscPos(str) {
+    if (!str) return '';
+    return String(str)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .replace(/[^\x20-\x7E\n\r]/g, '');
+}
+
+function parsePrinterIpPort(ipInput) {
+    const raw = String(ipInput || '').trim().replace(/^https?:\/\//i, '');
+    if (!raw) return { host: '', port: 9100 };
+    const parts = raw.split(':');
+    const host = (parts[0] || '').trim();
+    const port = parseInt(parts[1] || '9100', 10) || 9100;
+    return { host, port };
+}
+
+function isPrivateLanIp(host) {
+    return /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.)/.test(String(host || '').trim());
+}
+
+function buildEscPosBuffer(payload = {}) {
+    const {
+        type = 'KITCHEN', // 'KITCHEN' | 'RECEIPT' | 'TEST'
+        paperSize = '80mm',
+        resName = 'NHA HANG CHAY HOA SEN',
+        resAddr = '',
+        resPhone = '',
+        title = 'PHIEU CHE BIEN BEP',
+        orderCode = 'TEST-001',
+        tableName = 'Ban 01',
+        staffName = 'Thu Ngan',
+        timeStr = new Date().toLocaleString('vi-VN'),
+        items = [],
+        note = '',
+        totals = {},
+        footer = 'Xin cam on & Hen gap lai Quy Khach!'
+    } = payload;
+
+    const lineWidth = paperSize === '58mm' ? 32 : 48;
+    const divider = '-'.repeat(lineWidth) + '\n';
+    const doubleDivider = '='.repeat(lineWidth) + '\n';
+
+    const padRow = (left, right) => {
+        const l = removeVietnameseTonesForEscPos(left);
+        const r = removeVietnameseTonesForEscPos(right);
+        const space = Math.max(1, lineWidth - l.length - r.length);
+        return l + ' '.repeat(space) + r + '\n';
+    };
+
+    const chunks = [];
+    const pushBytes = (...bytes) => chunks.push(Buffer.from(bytes));
+    const pushText = (txt) => chunks.push(Buffer.from(removeVietnameseTonesForEscPos(txt), 'ascii'));
+
+    // 1. Khởi tạo máy in (ESC @)
+    pushBytes(0x1B, 0x40);
+
+    // 2. Nếu là phiếu bếp -> Phát tiếng bíp báo bếp trên máy in (ESC B 3 2)
+    if (type === 'KITCHEN') {
+        pushBytes(0x1B, 0x42, 0x03, 0x02);
+    }
+
+    // 3. Header căn giữa (ESC a 1)
+    pushBytes(0x1B, 0x61, 0x01);
+    // Chữ đậm (ESC E 1)
+    pushBytes(0x1B, 0x45, 0x01);
+    pushText(resName.toUpperCase() + '\n');
+    pushBytes(0x1B, 0x45, 0x00);
+
+    if (resAddr && type !== 'KITCHEN') pushText(resAddr + '\n');
+    if (resPhone && type !== 'KITCHEN') pushText('DT: ' + resPhone + '\n');
+
+    pushText(doubleDivider);
+
+    // Tiêu đề phiếu (Chữ cao gấp đôi GS ! 0x11)
+    pushBytes(0x1B, 0x45, 0x01);
+    pushBytes(0x1D, 0x21, 0x01);
+    pushText(title.toUpperCase() + '\n');
+    if (tableName) {
+        pushText(tableName.toUpperCase() + '\n');
+    }
+    pushBytes(0x1D, 0x21, 0x00);
+    pushBytes(0x1B, 0x45, 0x00);
+
+    // Căn trái (ESC a 0)
+    pushBytes(0x1B, 0x61, 0x00);
+    pushText(padRow(`Ma: #${orderCode}`, `NV: ${staffName}`));
+    pushText(`Gio: ${timeStr}\n`);
+    pushText(divider);
+
+    // 4. Danh sách món
+    if (type === 'KITCHEN') {
+        pushBytes(0x1B, 0x45, 0x01);
+        pushText(padRow('TEN MON CHE BIEN', 'SL'));
+        pushBytes(0x1B, 0x45, 0x00);
+        pushText(divider);
+
+        items.forEach((it, idx) => {
+            const name = `${idx + 1}. ${it.name || it.Item_name || 'Mon chay'}`;
+            const qty = `x${it.qty || it.Quantity || it.quantity || 1}`;
+            // In đậm và cao hơn cho món bếp
+            pushBytes(0x1B, 0x45, 0x01);
+            pushText(padRow(name, qty));
+            pushBytes(0x1B, 0x45, 0x00);
+            const itToppings = it.toppings || it.Toppings || '';
+            const itNote = it.note || it.Note || '';
+            if (itToppings) pushText(`   + ${itToppings}\n`);
+            if (itNote) pushText(`   >> GHI CHU: ${itNote}\n`);
+        });
+    } else {
+        pushBytes(0x1B, 0x45, 0x01);
+        pushText(padRow('MON AN (SL x Don gia)', 'THANH TIEN'));
+        pushBytes(0x1B, 0x45, 0x00);
+        pushText(divider);
+
+        items.forEach((it, idx) => {
+            const name = `${idx + 1}. ${it.name || it.Item_name || 'Mon chay'}`;
+            const qty = Number(it.qty || it.Quantity || it.quantity || 1);
+            const price = Number(it.price ?? it.Unit_price ?? 0);
+            const total = Number(it.total ?? it.Total_price ?? (qty * price));
+            pushBytes(0x1B, 0x45, 0x01);
+            pushText(name + '\n');
+            pushBytes(0x1B, 0x45, 0x00);
+            pushText(padRow(`   SL: ${qty} x ${price.toLocaleString('vi-VN')}`, `${total.toLocaleString('vi-VN')} d`));
+            const itToppings = it.toppings || it.Toppings || '';
+            const itNote = it.note || it.Note || '';
+            if (itToppings) pushText(`   + ${itToppings}\n`);
+            if (itNote) pushText(`   - ${itNote}\n`);
+        });
+    }
+
+    if (note) {
+        pushText(divider);
+        pushBytes(0x1B, 0x45, 0x01);
+        pushText(`GHI CHU DON: ${note}\n`);
+        pushBytes(0x1B, 0x45, 0x00);
+    }
+
+    // 5. Tổng tiền (nếu là hóa đơn thu ngân)
+    if (type !== 'KITCHEN' && totals && totals.finalPayable !== undefined) {
+        pushText(divider);
+        if (totals.grossAmount !== undefined) {
+            pushText(padRow('Tam tinh:', `${Number(totals.grossAmount || 0).toLocaleString('vi-VN')} d`));
+        }
+        if (Number(totals.discountAmount || 0) > 0) {
+            pushText(padRow('Uu dai / KM:', `-${Number(totals.discountAmount).toLocaleString('vi-VN')} d`));
+        }
+        if (Number(totals.vatAmount || 0) > 0) {
+            pushText(padRow('Thue VAT:', `${Number(totals.vatAmount).toLocaleString('vi-VN')} d`));
+        }
+        if (Number(totals.prepaidUsed || 0) > 0) {
+            pushText(padRow('Tru Vi Tra Truoc:', `-${Number(totals.prepaidUsed).toLocaleString('vi-VN')} d`));
+        }
+        pushText(doubleDivider);
+        pushBytes(0x1B, 0x45, 0x01);
+        pushBytes(0x1D, 0x21, 0x01);
+        pushText(padRow('THUC THU:', `${Number(totals.finalPayable || 0).toLocaleString('vi-VN')} d`));
+        pushBytes(0x1D, 0x21, 0x00);
+        pushBytes(0x1B, 0x45, 0x00);
+    }
+
+    pushText(doubleDivider);
+
+    // 6. Chân trang căn giữa
+    pushBytes(0x1B, 0x61, 0x01);
+    if (footer) {
+        pushText(footer + '\n');
+    }
+    // Đẩy giấy 4 dòng và cắt giấy tự động (GS V 66 0)
+    pushText('\n\n\n\n');
+    pushBytes(0x1D, 0x56, 0x42, 0x00);
+
+    return Buffer.concat(chunks);
+}
+
+function sendTcpEscPos(host, port, buffer, timeoutMs = 2500) {
+    return new Promise((resolve, reject) => {
+        const client = new net.Socket();
+        let settled = false;
+
+        const finish = (err, result) => {
+            if (settled) return;
+            settled = true;
+            try { client.destroy(); } catch (e) {}
+            if (err) reject(err);
+            else resolve(result);
+        };
+
+        client.setTimeout(timeoutMs);
+        client.on('timeout', () => finish(new Error(`Quá thời gian chờ (${timeoutMs}ms) khi kết nối tới ${host}:${port}`)));
+        client.on('error', (err) => finish(err));
+
+        client.connect(port, host, () => {
+            client.write(buffer, (err) => {
+                if (err) return finish(err);
+                client.end();
+                finish(null, { connected: true, bytesSent: buffer.length });
+            });
+        });
+    });
+}
+
+app.post('/api/printer/print-tcp', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const { host, port } = parsePrinterIpPort(body.ipPort || body.ip || '');
+        const escposBuffer = buildEscPosBuffer(body);
+        const escposBase64 = escposBuffer.toString('base64');
+
+        if (!host) {
+            return res.json({
+                success: false,
+                needClientBridge: true,
+                escposBase64,
+                error: 'Chưa nhập địa chỉ IP máy in.'
+            });
+        }
+
+        try {
+            const tcpResult = await sendTcpEscPos(host, port, escposBuffer, 2200);
+            return res.json({
+                success: true,
+                printedViaServerTcp: true,
+                host,
+                port,
+                bytesSent: tcpResult.bytesSent,
+                escposBase64,
+                message: `Đã gửi lệnh in trực tiếp tới máy in [${host}:${port}] thành công!`
+            });
+        } catch (tcpErr) {
+            const privateIp = isPrivateLanIp(host);
+            return res.json({
+                success: false,
+                printedViaServerTcp: false,
+                needClientBridge: true,
+                isPrivateLanIp: privateIp,
+                host,
+                port,
+                escposBase64,
+                error: privateIp
+                    ? `Máy in [${host}:${port}] nằm trong mạng Wi-Fi nội bộ (LAN) của quán còn Server đang chạy trên Cloud. Đã chuyển sang chế độ In Trực Tiếp từ Tablet Android!`
+                    : `Không thể kết nối TCP trực tiếp tới [${host}:${port}]: ${tcpErr.message}`
+            });
+        }
+    } catch (err) {
+        console.error('Lỗi /api/printer/print-tcp:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// =========================================================================
+// API IN TRỰC TIẾP TỪ SERVER QUA MẠNG LAN TCP 9100 (BỎ QUA HOÀN TOÀN CHROME)
+// =========================================================================
+app.post('/api/print-order', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const target = String(body.target || 'CASHIER').toUpperCase();
+
+        // 1. Xác định IP máy in mục tiêu (tự lấy từ CSDL nếu client không truyền)
+        let rawIp = String(body.printerIp || body.ip || body.ipPort || '').trim();
+        if (!rawIp) {
+            try {
+                const configRows = db.prepare("SELECT Key, Value FROM SYSTEM_CONFIG WHERE Key IN ('kitchen_printer_ip', 'printerIp', 'printer_ip')").all();
+                const cfgMap = {};
+                configRows.forEach(r => {
+                    try { cfgMap[r.Key] = JSON.parse(r.Value); } catch(e) { cfgMap[r.Key] = r.Value; }
+                });
+                if (target === 'KITCHEN') {
+                    rawIp = cfgMap.kitchen_printer_ip || cfgMap.printerIp || cfgMap.printer_ip || '';
+                } else {
+                    rawIp = cfgMap.printerIp || cfgMap.printer_ip || cfgMap.kitchen_printer_ip || '';
+                }
+            } catch(e) {}
+        }
+
+        const { host, port } = parsePrinterIpPort(rawIp || '192.168.1.200:9100');
+        if (!host) {
+            return res.status(400).json({ success: false, error: 'Chưa cấu hình địa chỉ IP máy in.' });
+        }
+
+        // 2. Tạo Buffer lệnh in ESC/POS
+        let escposBuffer = null;
+        if (body.receiptText) {
+            const chunks = [];
+            chunks.push(Buffer.from([0x1B, 0x40])); // ESC @ (Reset/Khởi tạo máy in)
+            if (target === 'KITCHEN') {
+                chunks.push(Buffer.from([0x1B, 0x42, 0x03, 0x02])); // Bíp chuông báo bếp
+            }
+            chunks.push(Buffer.from(removeVietnameseTonesForEscPos(body.receiptText), 'ascii'));
+            chunks.push(Buffer.from('\n\n\n\n'));
+            chunks.push(Buffer.from([0x1D, 0x56, 0x42, 0x00])); // Cắt giấy GS V 66 0
+            escposBuffer = Buffer.concat(chunks);
+        } else if (body.orderId || body.orderCode) {
+            const searchCode = String(body.orderCode || body.orderId || '').replace('#', '').trim();
+            const orderRow = db.prepare(`
+                SELECT * FROM ORDERS 
+                WHERE Order_id = ? OR Order_code = ? OR Order_code = ? 
+                LIMIT 1
+            `).get(searchCode, searchCode, 'CHAY-' + searchCode);
+
+            let items = [];
+            if (orderRow) {
+                try {
+                    items = db.prepare('SELECT * FROM ORDER_DETAILS WHERE Order_id = ?').all(orderRow.Order_id);
+                } catch (e2) {
+                    items = [];
+                }
+            }
+
+            const payload = {
+                type: target === 'KITCHEN' ? 'KITCHEN' : 'RECEIPT',
+                paperSize: body.paperSize || '80mm',
+                resName: body.resName || 'NHA HANG CHAY HOA SEN',
+                title: target === 'KITCHEN' ? 'PHIEU BEP CHE BIEN' : 'HOA DON THANH TOAN',
+                orderCode: orderRow?.Order_code || searchCode,
+                tableName: orderRow?.Table_number || orderRow?.Table_name || 'Ban Khach',
+                staffName: orderRow?.Staff_name || 'Thu Ngan',
+                timeStr: orderRow?.Created_at || new Date().toLocaleString('vi-VN'),
+                items: items.map(it => ({
+                    name: it.Item_name || it.item_name || 'Mon an',
+                    qty: it.Quantity || it.quantity || 1,
+                    price: it.Unit_price || it.price || 0,
+                    total: it.Total_price || ((it.Quantity || 1) * (it.Unit_price || 0)),
+                    note: it.Note || it.note || ''
+                })),
+                note: orderRow?.Note || '',
+                totals: {
+                    grossAmount: orderRow?.Total_amount || orderRow?.Final_amount,
+                    discountAmount: orderRow?.Discount_amount,
+                    finalPayable: orderRow?.Final_amount
+                }
+            };
+            escposBuffer = buildEscPosBuffer(payload);
+        } else {
+            escposBuffer = buildEscPosBuffer({ ...body, type: target === 'KITCHEN' ? 'KITCHEN' : 'RECEIPT' });
+        }
+
+        // Phát sự kiện Socket Realtime cho Cầu Nối Máy In LAN nếu có
+        try {
+            io.emit('lan_print_job', {
+                host,
+                port,
+                target,
+                escposBase64: escposBuffer.toString('base64'),
+                time: Date.now()
+            });
+        } catch(e) {}
+
+        // 3. Mở TCP Socket kết nối thẳng tới máy in (Cổng 9100) theo đúng Cách 3
+        const client = new net.Socket();
+        let isSettled = false;
+        const timeoutMs = 3000;
+
+        client.setTimeout(timeoutMs);
+
+        client.connect(port, host, () => {
+            if (isSettled) return;
+            client.write(escposBuffer, (writeErr) => {
+                if (isSettled) return;
+                isSettled = true;
+                client.end();
+                if (writeErr) {
+                    return res.status(500).json({ success: false, error: writeErr.message, host, port, escposBase64: escposBuffer.toString('base64') });
+                }
+                return res.json({
+                    success: true,
+                    message: `Đã in trực tiếp từ Server qua TCP tới máy in [${host}:${port}] thành công!`,
+                    host,
+                    port,
+                    bytesSent: escposBuffer.length,
+                    escposBase64: escposBuffer.toString('base64')
+                });
+            });
+        });
+
+        client.on('error', (err) => {
+            if (isSettled) return;
+            isSettled = true;
+            try { client.destroy(); } catch(e) {}
+            const isPrivate = isPrivateLanIp(host);
+            return res.status(500).json({
+                success: false,
+                error: `Không thể kết nối TCP tới máy in [${host}:${port}]: ${err.message}`,
+                host,
+                port,
+                isPrivateLanIp: isPrivate,
+                hint: isPrivate ? 'Máy in nằm trong mạng LAN quán trong khi Server đang chạy trên Cloud VPS.' : ''
+            });
+        });
+
+        client.on('timeout', () => {
+            if (isSettled) return;
+            isSettled = true;
+            try { client.destroy(); } catch(e) {}
+            const isPrivate = isPrivateLanIp(host);
+            return res.status(504).json({
+                success: false,
+                error: `Quá thời gian chờ (${timeoutMs}ms) khi kết nối máy in [${host}:${port}].`,
+                host,
+                port,
+                isPrivateLanIp: isPrivate,
+                hint: isPrivate ? 'Máy in nằm trong mạng LAN quán trong khi Server đang chạy trên Cloud VPS.' : ''
+            });
+        });
+    } catch(err) {
+        console.error('Lỗi POST /api/print-order:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // API Chuyển văn bản thành giọng đọc Tiếng Việt chuẩn (Universal Text-to-Speech cho mọi thiết bị Mobile & PC)
 app.get('/api/tts', async (req, res) => {
     try {
@@ -2083,6 +2526,13 @@ app.post('/api/login', (req, res) => {
         }
 
         if (user) {
+            if (String(user.Status || 'ACTIVE').toUpperCase() === 'LOCKED') {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Tài khoản này hiện đang bị tạm khóa hoặc đã ngừng hoạt động. Vui lòng liên hệ Quản lý!'
+                });
+            }
+
             const role = user.Role || user.role || 'WAITER';
             const fullName = (memberInfo && memberInfo.Full_name) || user.Full_name || user.full_name || user.User_name || 'Khách Hàng';
             const userIdStr = String(user.User_id || user.id || 1);
@@ -2295,8 +2745,21 @@ app.post('/api/login', (req, res) => {
                     User_name: user.User_name || user.username || accountInput,
                     Full_name: fullName,
                     Role: role,
+                    Gender: user.Gender || 'Khác',
+                    Birthday: user.Birthday || (memberInfo ? memberInfo.Birthdate : '') || '',
+                    Phone: memberInfo ? memberInfo.Phone : (user.Phone || ''),
+                    Email: user.Email || (memberInfo ? memberInfo.Email : '') || '',
+                    Address: user.Address || '',
+                    Citizen_id: user.Citizen_id || '',
+                    Shift: user.Shift || '',
+                    Hire_date: user.Hire_date || '',
+                    Emergency_contact: user.Emergency_contact || '',
+                    Position_note: user.Position_note || '',
+                    Status: user.Status || 'ACTIVE',
+                    Created_at: user.Created_at || '',
+                    Updated_at: user.Updated_at || '',
+                    Password_changed_at: user.Password_changed_at || '',
                     Member_id: memberInfo ? memberInfo.Member_id : (user.Member_id || null),
-                    Phone: memberInfo ? memberInfo.Phone : (user.Phone || null),
                     Card_code: memberInfo ? memberInfo.Card_code : null,
                     sessionToken: sessionToken
                 }
@@ -2467,6 +2930,19 @@ app.post('/api/orders', (req, res) => {
             const cleanCode = editingOrderId;
             const codeWithPrefix = cleanCode.startsWith('CHAY-') ? cleanCode : ('CHAY-' + cleanCode);
             const codeWithoutPrefix = cleanCode.replace('CHAY-', '');
+
+            // 🔒 Chặn sửa đơn đã hoàn tất / đã thu tiền / đã hủy
+            const lockedRow = db.prepare(`
+                SELECT Status, Payment_status FROM ORDERS
+                WHERE Order_code = ? OR Order_code = ? OR Order_code = ? OR Order_id = ?
+            `).get(codeWithPrefix, cleanCode, codeWithoutPrefix, cleanCode);
+            if (lockedRow) {
+                const st = String(lockedRow.Status || '').toUpperCase();
+                const paid = String(lockedRow.Payment_status || '').toUpperCase() === 'PAID';
+                if (paid || ['COMPLETED', 'DONE', 'FINISHED', 'SERVED', 'CANCELED', 'CANCELLED'].includes(st)) {
+                    return res.status(400).json({ success: false, error: 'Đơn hàng đã hoàn tất / đã thu tiền / đã hủy, không thể sửa.' });
+                }
+            }
 
             // Thực hiện Cập nhật CSDL
             const stmtUpdate = db.prepare(`
@@ -2848,6 +3324,11 @@ app.get('/api/orders/:code/history', (req, res) => {
 // ==========================================
 app.get('/api/kitchen/pending-orders', (req, res) => {
     try {
+        res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
         const orders = db.prepare(`
             SELECT * FROM ORDERS 
             WHERE (Status IS NULL OR Status = '' OR UPPER(Status) IN ('PENDING', 'PROCESSING', 'COOKING', 'ACCEPTED'))
@@ -3024,21 +3505,8 @@ try {
     if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
         const https = require('https');
         const httpsServer = https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app);
-        io.engine.attach(httpsServer, { path: '/socket.io/' });
-        // Phục vụ file socket.io.js cho trình duyệt trên cổng HTTPS
-        const engineListeners = httpsServer.listeners('request').slice();
-        httpsServer.removeAllListeners('request');
-        httpsServer.on('request', (req, res) => {
-            if (req.url && req.url.startsWith('/socket.io/socket.io.js')) {
-                try {
-                    const clientPath = path.join(__dirname, 'node_modules', 'socket.io', 'client-dist', 'socket.io.js');
-                    if (!fs.existsSync(clientPath)) throw new Error('missing');
-                    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
-                    return fs.createReadStream(clientPath).pipe(res);
-                } catch (e) { /* bỏ qua, chuyển tiếp */ }
-            }
-            engineListeners.forEach(fn => fn.call(httpsServer, req, res));
-        });
+        // Gắn Socket.IO vào HTTPS Server chuẩn mực, hỗ trợ cả phục vụ socket.io.js và kết nối WebSocket
+        io.attach(httpsServer, { cors: { origin: "*" } });
         httpsServer.on('error', (e) => console.error('⚠️ Không mở được HTTPS:', e.message));
         httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
             console.log(`🔒 HTTPS (quét QR bằng camera điện thoại): https://192.168.1.12:${HTTPS_PORT}`);

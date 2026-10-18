@@ -27,6 +27,11 @@ function emitOrderBadgeCounts(io) {
 // 1. GET: Lấy danh sách đơn chờ cho Bếp (Khớp chính xác Field CSDL)
 router.get('/pending-orders', (req, res) => {
     try {
+        res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
         const db = new Database(DB_PATH, { readonly: true });
         
         // Lấy tất cả đơn hàng đang chờ xử lý từ bảng ORDERS
@@ -35,7 +40,8 @@ router.get('/pending-orders', (req, res) => {
                    Delivery_platform, Customer_phone, Delivery_address, Payment_type,
                    Staff_name, Created_by, Paid_by, Member_id, Member_name, Member_tier, Member_phone
             FROM ORDERS 
-            WHERE Status = 'PROCESSING' OR Status IS NULL OR Status = '' OR Status = 'PENDING' OR UPPER(Status) IN ('COOKING', 'ACCEPTED')
+            WHERE (Status = 'PROCESSING' OR Status IS NULL OR Status = '' OR Status = 'PENDING' OR UPPER(Status) IN ('COOKING', 'ACCEPTED'))
+              AND (Cancel_role IS NULL OR Cancel_role = '')
             ORDER BY Order_id DESC
         `).all();
 
@@ -282,17 +288,19 @@ router.put('/deliver-order/:id', (req, res) => {
         }
 
         // LƯU Ý: Bồi bàn xác nhận trả món chỉ ghi nhận phục vụ (KPI), KHÔNG tự làm bàn trống.
-        // Khách vẫn đang ngồi dùng bữa tại bàn. Bàn chỉ được dọn trống khi nhân viên chủ động bấm nút "Dọn bàn".
-
         db.close();
 
         const io = req.app.get('io');
         if (io) {
+            const finalOrderId = orderInfo ? orderInfo.Order_id : orderIdentifier;
+            const finalOrderCode = orderInfo ? orderInfo.Order_code : orderIdentifier;
             io.emit('order_status_updated', { 
-                Order_id: orderInfo ? orderInfo.Order_id : orderIdentifier, 
-                Order_code: orderInfo ? orderInfo.Order_code : orderIdentifier, 
+                Order_id: finalOrderId, 
+                Order_code: finalOrderCode, 
                 Status: 'COMPLETED' 
             });
+            io.emit('table_updated');
+            io.emit('tables_list_changed');
             emitOrderBadgeCounts(io);
         }
 

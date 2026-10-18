@@ -1,2 +1,6 @@
-database.db* 
-"file cau hinh projectfood.txt" 
+node_modules/
+.env
+*.log
+database.db-wal
+database.db-shm
+HoaSenPOS.apk

@@ -22,8 +22,22 @@ window.switchSystemTab = function(tabId) {
     const activeBtn = document.getElementById(tabId + '-btn');
     const activePane = document.getElementById(tabId);
 
-    if (activeBtn) activeBtn.classList.add('active');
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        const mobileLabel = document.getElementById('mobileSysCurrentTabLabel');
+        if (mobileLabel) {
+            mobileLabel.innerText = activeBtn.innerText.trim();
+        }
+    }
     if (activePane) activePane.classList.remove('d-none');
+
+    // Tự động đóng menu dọc trên điện thoại sau khi chọn mục
+    const sysTabsContainer = document.getElementById('systemSettingTabs');
+    const sysToggleBtn = document.getElementById('mobileSysTabsToggleBtn');
+    if (sysTabsContainer && sysTabsContainer.classList.contains('mobile-subtabs-open')) {
+        sysTabsContainer.classList.remove('mobile-subtabs-open');
+        if (sysToggleBtn) sysToggleBtn.classList.remove('open');
+    }
 
     if (tabId === 'tab-printer') {
         window.renderLiveBillPreviewInline();
@@ -52,12 +66,283 @@ window.switchSystemTab = function(tabId) {
     }
 };
 
+// =========================================================================
+// ENGINE IN NHIỆT ĐA NỀN TẢNG (TABLET ANDROID CHROME / RAWBT / LAN TCP 9100 / PC)
+// =========================================================================
+
+window.toggleAndroidPrinterGuide = function() {
+    const box = document.getElementById('androidPrinterSetupGuideBox');
+    if (!box) return;
+    box.style.display = (box.style.display === 'none') ? 'block' : 'none';
+};
+
+window.syncPrinterIpBetweenKitchenAndCashier = function(direction) {
+    const kitchenInput = document.getElementById('sysKitchenPrinterIpInput');
+    const cashierInput = document.getElementById('sysPrinterIpInput');
+    if (!kitchenInput || !cashierInput) return;
+
+    if (direction === 'FROM_KITCHEN') {
+        const val = kitchenInput.value.trim();
+        if (!val) {
+            if (window.toast) window.toast.warning('Vui lòng nhập IP vào ô Máy In Bếp trước!');
+            return;
+        }
+        cashierInput.value = val;
+        if (window.toast) window.toast.success(`Đã áp dụng chung địa chỉ IP [${val}] cho cả Máy In Bếp & Máy In Thu Ngân!`);
+    } else {
+        const val = cashierInput.value.trim();
+        if (!val) {
+            if (window.toast) window.toast.warning('Vui lòng nhập IP vào ô Máy In Thu Ngân trước!');
+            return;
+        }
+        kitchenInput.value = val;
+        if (window.toast) window.toast.success(`Đã áp dụng chung địa chỉ IP [${val}] cho cả Máy In Thu Ngân & Máy In Bếp!`);
+    }
+    if (typeof window.saveAllSystemSettings === 'function') {
+        window.saveAllSystemSettings(true);
+    }
+};
+
+// Gửi gói lệnh ESC/POS (Base64) qua cầu nối RawBT trên Tablet Android (WebSocket 40213 hoặc URI rawbt:base64,)
+window.sendEscPosToAndroidRawBt = function(escposBase64) {
+    return new Promise((resolve) => {
+        if (!escposBase64) return resolve(false);
+        let handled = false;
+        try {
+            const ws = new WebSocket('ws://localhost:40213/');
+            const timer = setTimeout(() => {
+                if (!handled) {
+                    handled = true;
+                    try { ws.close(); } catch (e) {}
+                    // Fallback sang giao thức rawbt:base64, chuẩn trên Android Chrome
+                    const a = document.createElement('a');
+                    a.href = 'rawbt:base64,' + escposBase64;
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => a.remove(), 1000);
+                    resolve(true);
+                }
+            }, 700);
+
+            ws.onopen = function() {
+                if (handled) return;
+                handled = true;
+                clearTimeout(timer);
+                // RawBT WebSocket nhận chuỗi base64 hoặc binary
+                try {
+                    const binaryString = window.atob(escposBase64);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    ws.send(bytes.buffer);
+                } catch (err) {
+                    ws.send('rawbt:base64,' + escposBase64);
+                }
+                setTimeout(() => {
+                    try { ws.close(); } catch (e) {}
+                    resolve(true);
+                }, 300);
+            };
+
+            ws.onerror = function() {
+                if (handled) return;
+                handled = true;
+                clearTimeout(timer);
+                const a = document.createElement('a');
+                a.href = 'rawbt:base64,' + escposBase64;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => a.remove(), 1000);
+                resolve(true);
+            };
+        } catch (e) {
+            const a = document.createElement('a');
+            a.href = 'rawbt:base64,' + escposBase64;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => a.remove(), 1000);
+            resolve(true);
+        }
+    });
+};
+
+// Hàm In Nhiệt Chuẩn Cho Mọi Thiết Bị (Đặc biệt khắc phục lỗi mất lệnh in & chặn Popup trên Chrome Android Tablet)
+window.printThermalHtml = async function(fullOrBodyHtml, options = {}) {
+    const paperWidth = options.paperWidth || '80mm';
+    const printerRole = options.printerRole || 'RECEIPT'; // 'RECEIPT' | 'KITCHEN'
+    const escposPayload = options.escposPayload || null;
+
+    let sysConfig = {};
+    try {
+        sysConfig = JSON.parse(localStorage.getItem('hoasen_system_config') || '{}');
+    } catch (e) {}
+
+    const printerMode = (printerRole === 'KITCHEN')
+        ? (document.getElementById('sysKitchenPrinterSelect')?.value || sysConfig.kitchen_printer_type || 'LAN')
+        : (document.getElementById('sysPrinterSelect')?.value || sysConfig.printer_type || 'LAN');
+
+    const ipPort = (printerRole === 'KITCHEN')
+        ? (document.getElementById('sysKitchenPrinterIpInput')?.value?.trim() || sysConfig.kitchen_printer_ip || sysConfig.printer_ip || '')
+        : (document.getElementById('sysPrinterIpInput')?.value?.trim() || sysConfig.printer_ip || sysConfig.kitchen_printer_ip || '');
+
+    // 1. In Trực Tiếp Từ Backend/Server Qua Mạng LAN TCP 9100 (Bỏ qua hoàn toàn Chrome theo đúng Cách 3)
+    try {
+        const printOrderPayload = {
+            target: (printerRole === 'KITCHEN') ? 'KITCHEN' : 'CASHIER',
+            printerIp: ipPort,
+            paperSize: (paperWidth === '58mm') ? '58mm' : '80mm',
+            ...(escposPayload || {})
+        };
+        const res = await fetch('/api/print-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(printOrderPayload)
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            if (window.toast) window.toast.success(`🖨️ ${data.message || `Đã in trực tiếp thành công ra máy in [${ipPort || '9100'}]!`}`);
+            return true;
+        }
+
+        // Nếu người dùng bật chế độ RawBT 1-chạm trên Android Tablet và Server trả về escposBase64
+        if (printerMode === 'RAWBT_DIRECT' && data && data.escposBase64) {
+            if (window.toast) window.toast.info(`⚡ Đang truyền lệnh in 1-chạm qua RawBT tới máy in [${ipPort || 'LAN'}]...`);
+            await window.sendEscPosToAndroidRawBt(data.escposBase64);
+            return true;
+        }
+
+        if (data && data.error) {
+            console.warn('Lỗi in qua Server TCP 9100:', data.error);
+            if (window.toast) {
+                window.toast.warning(`⚠️ Server không kết nối được tới [${data.host || ipPort}:${data.port || 9100}]. Đang mở chế độ in dự phòng...`);
+            }
+        }
+    } catch (err) {
+        console.warn('Không thể gọi API print-order, chuyển sang in dự phòng trên trình duyệt:', err);
+    }
+
+    // 2. Chế độ In Đồ Họa Sắc Nét Ngay Trên Trang (In-Page @media print)
+    // Không dùng window.open + window.close(600ms) vì Chrome Android sẽ đóng tab trước khi Spooler kịp nhận lệnh!
+    let innerBody = String(fullOrBodyHtml || '');
+    let extraStyles = '';
+
+    const styleMatches = innerBody.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
+    if (styleMatches) {
+        extraStyles = styleMatches.map(s => s.replace(/<\/?style[^>]*>/gi, '')).join('\n');
+    }
+    const bodyMatch = innerBody.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch) {
+        innerBody = bodyMatch[1];
+    }
+    // Loại bỏ thẻ <script> tự gọi window.print / window.close cũ bên trong mẫu HTML
+    innerBody = innerBody.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+    let styleEl = document.getElementById('hoasenThermalPrintStyle');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'hoasenThermalPrintStyle';
+        document.head.appendChild(styleEl);
+    }
+
+    styleEl.innerHTML = `
+        @media screen {
+            #hoasenThermalPrintArea {
+                display: none !important;
+            }
+        }
+        @media print {
+            @page {
+                size: ${paperWidth} auto;
+                margin: 0mm;
+            }
+            body > *:not(#hoasenThermalPrintArea) {
+                display: none !important;
+            }
+            html, body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            #hoasenThermalPrintArea {
+                display: block !important;
+                width: 100% !important;
+                max-width: ${paperWidth === '58mm' ? '58mm' : (paperWidth === '210mm' ? '210mm' : '80mm')} !important;
+                margin: 0 auto !important;
+                padding: 6px 4px !important;
+                font-family: 'Courier New', Courier, monospace !important;
+                font-size: ${paperWidth === '58mm' ? '11.5px' : '13px'} !important;
+                line-height: 1.4 !important;
+                color: #000000 !important;
+                background: #ffffff !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            #hoasenThermalPrintArea table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+            }
+            #hoasenThermalPrintArea img {
+                max-width: 100% !important;
+                height: auto !important;
+            }
+            ${extraStyles.replace(/\bbody\b/g, '#hoasenThermalPrintArea')}
+        }
+    `;
+
+    let printArea = document.getElementById('hoasenThermalPrintArea');
+    if (!printArea) {
+        printArea = document.createElement('div');
+        printArea.id = 'hoasenThermalPrintArea';
+        document.body.appendChild(printArea);
+    }
+    printArea.innerHTML = innerBody;
+
+    // Đợi tất cả ảnh (như mã QR VietQR) nạp xong trước khi mở hộp thoại in của Android Chrome
+    const imgs = Array.from(printArea.querySelectorAll('img'));
+    if (imgs.length > 0) {
+        await Promise.race([
+            Promise.all(imgs.map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise(res => {
+                    img.onload = res;
+                    img.onerror = res;
+                });
+            })),
+            new Promise(res => setTimeout(res, 1200))
+        ]);
+    }
+
+    // Nếu đang chạy trong App Android WebView có Native Bridge
+    if (window.Android && typeof window.Android.printHtml === 'function') {
+        try {
+            window.Android.printHtml(fullOrBodyHtml);
+            return true;
+        } catch (errAndroid) {
+            console.warn('[Print] Native Android print error, fallback to window.print:', errAndroid);
+        }
+    }
+
+    // Gọi hộp thoại in của trình duyệt (Android Print Spooler / RawBT Print Service / Windows Print)
+    window.print();
+    return true;
+};
+
 // 2. Chuyển đổi hiển thị ô nhập IP theo loại máy in Thu Ngân
 window.handlePrinterTypeChange = function() {
     const printerType = document.getElementById('sysPrinterSelect')?.value || 'LAN';
     const ipBox = document.getElementById('sysPrinterIpBox');
     if (ipBox) {
-        ipBox.style.display = (printerType === 'LAN') ? 'block' : 'none';
+        ipBox.style.display = (printerType === 'LAN' || printerType === 'RAWBT_DIRECT') ? 'block' : 'none';
     }
 };
 
@@ -66,40 +351,116 @@ window.handleKitchenPrinterTypeChange = function() {
     const printerType = document.getElementById('sysKitchenPrinterSelect')?.value || 'LAN';
     const ipBox = document.getElementById('sysKitchenPrinterIpBox');
     if (ipBox) {
-        ipBox.style.display = (printerType === 'LAN') ? 'block' : 'none';
+        ipBox.style.display = (printerType === 'LAN' || printerType === 'RAWBT_DIRECT') ? 'block' : 'none';
     }
 };
 
-// 3. Kiểm tra kết nối Máy in Thu Ngân LAN / IP
-window.testPrinterIpConnection = function() {
+// 3. Kiểm tra & In Thử Máy in Thu Ngân LAN / IP Thực Tế
+window.testPrinterIpConnection = async function() {
     const ipVal = document.getElementById('sysPrinterIpInput')?.value?.trim();
     if (!ipVal) {
-        if (window.toast) window.toast.warning('Vui lòng nhập địa chỉ IP máy in Thu Ngân LAN!');
-        else alert('Vui lòng nhập địa chỉ IP máy in Thu Ngân LAN!');
+        if (window.toast) window.toast.warning('Vui lòng nhập địa chỉ IP máy in Thu Ngân (VD: 192.168.1.200:9100)!');
+        else alert('Vui lòng nhập địa chỉ IP máy in Thu Ngân!');
         return;
     }
-    if (window.toast) {
-        window.toast.info(`Đang kiểm tra kết nối tới máy in Thu Ngân [${ipVal}]...`);
-        setTimeout(() => {
-            window.toast.success(`Kết nối tốt tới máy in Thu Ngân [${ipVal}]! Cổng in 9100 sẵn sàng.`);
-        }, 600);
+
+    // Nếu ô IP Bếp vẫn đang để mặc định mà người dùng vừa nhập IP Thu Ngân -> hỏi hoặc đồng bộ lưu cấu hình
+    if (typeof window.saveAllSystemSettings === 'function') {
+        window.saveAllSystemSettings(true);
     }
+
+    if (window.toast) {
+        window.toast.info(`🖨️ Đang gửi lệnh In Thử Hóa Đơn Thu Ngân tới [${ipVal}]...`);
+    }
+
+    window.switchBillPreviewMode('RECEIPT');
+    const paperSize = document.getElementById('sysPaperSizeSelect')?.value || '80mm';
+    const resName = document.getElementById('sysResNameInput')?.value || 'NHÀ HÀNG CHAY HOA SEN';
+    const resAddr = document.getElementById('sysResAddrInput')?.value || '';
+    const resPhone = document.getElementById('sysResPhoneInput')?.value || '';
+
+    const escposPayload = {
+        type: 'RECEIPT',
+        paperSize,
+        resName,
+        resAddr,
+        resPhone,
+        title: 'HOA DON IN THU THU Ngan',
+        orderCode: 'TEST-BILL',
+        tableName: 'Ban 01 (Test IP: ' + ipVal + ')',
+        staffName: 'Quan Ly',
+        items: [
+            { name: 'Lau nam chay thanh dam', qty: 1, price: 180000, total: 180000 },
+            { name: 'Goi cuon ngu sac', qty: 2, price: 50000, total: 100000 }
+        ],
+        totals: {
+            grossAmount: 280000,
+            finalPayable: 280000
+        },
+        footer: 'Ket noi May In Thu Ngan [' + ipVal + '] Thanh Cong!'
+    };
+
+    const targetEl = document.getElementById('liveBillPaperPreviewInline');
+    const htmlContent = targetEl ? targetEl.innerHTML : `<div><h3>${resName}</h3><p>In thử máy in Thu Ngân IP: ${ipVal}</p></div>`;
+
+    await window.printThermalHtml(htmlContent, {
+        paperWidth: (paperSize === '58mm') ? '58mm' : '80mm',
+        printerRole: 'RECEIPT',
+        escposPayload
+    });
 };
 
-// 3.1. Kiểm tra kết nối Máy in Bếp LAN / IP
-window.testKitchenPrinterIpConnection = function() {
+// 3.1. Kiểm tra & In Thử Máy in Bếp LAN / IP Thực Tế
+window.testKitchenPrinterIpConnection = async function() {
     const ipVal = document.getElementById('sysKitchenPrinterIpInput')?.value?.trim();
     if (!ipVal) {
-        if (window.toast) window.toast.warning('Vui lòng nhập địa chỉ IP máy in Bếp LAN!');
-        else alert('Vui lòng nhập địa chỉ IP máy in Bếp LAN!');
+        if (window.toast) window.toast.warning('Vui lòng nhập địa chỉ IP máy in Bếp (VD: 192.168.1.201:9100)!');
+        else alert('Vui lòng nhập địa chỉ IP máy in Bếp!');
         return;
     }
-    if (window.toast) {
-        window.toast.info(`Đang kiểm tra kết nối tới máy in Bếp [${ipVal}]...`);
-        setTimeout(() => {
-            window.toast.success(`Kết nối tốt tới máy in Bếp [${ipVal}]! Cổng in 9100 sẵn sàng.`);
-        }, 600);
+
+    // Tự động đồng bộ sang IP Máy In Thu Ngân nếu IP Thu Ngân vẫn đang là mặc định 192.168.1.200:9100 (trường hợp quán có 1 máy in bill)
+    const cashierInput = document.getElementById('sysPrinterIpInput');
+    if (cashierInput && (!cashierInput.value.trim() || cashierInput.value.trim() === '192.168.1.200:9100')) {
+        cashierInput.value = ipVal;
     }
+
+    if (typeof window.saveAllSystemSettings === 'function') {
+        window.saveAllSystemSettings(true);
+    }
+
+    if (window.toast) {
+        window.toast.info(`🖨️ Đang gửi lệnh In Thử Phiếu Bếp tới [${ipVal}]...`);
+    }
+
+    window.switchBillPreviewMode('KITCHEN');
+    const paperSize = document.getElementById('sysKitchenPaperSizeSelect')?.value || '80mm';
+    const resName = document.getElementById('sysResNameInput')?.value || 'NHÀ HÀNG CHAY HOA SEN';
+
+    const escposPayload = {
+        type: 'KITCHEN',
+        paperSize,
+        resName,
+        title: 'PHIEU BEP IN THU',
+        orderCode: 'TEST-BEP',
+        tableName: 'BAN 02 (IP: ' + ipVal + ')',
+        staffName: 'Bep Chay',
+        items: [
+            { name: 'Lau nam chay thanh dam', qty: 1, note: 'It cay, them rau' },
+            { name: 'Goi cuon ngu sac', qty: 2, note: 'Nuoc cham tuong dau' }
+        ],
+        note: 'Test ket noi May In Bep IP: ' + ipVal,
+        footer: 'May in Bep [' + ipVal + '] San Sang!'
+    };
+
+    const targetEl = document.getElementById('liveKitchenTicketPreviewInline');
+    const htmlContent = targetEl ? targetEl.innerHTML : `<div><h3>PHIẾU BẾP IN THỬ</h3><p>IP: ${ipVal}</p></div>`;
+
+    await window.printThermalHtml(htmlContent, {
+        paperWidth: (paperSize === '58mm') ? '58mm' : '80mm',
+        printerRole: 'KITCHEN',
+        escposPayload
+    });
 };
 
 // 3.2. Bật / Tắt hiển thị chi tiết Thuế VAT
@@ -653,69 +1014,13 @@ window.renderLiveBillPreviewInline = function() {
 };
 
 // 9. In Thử Hóa Đơn / Phiếu Bếp Trực Tiếp
-window.executeTestPrintInline = function() {
+window.executeTestPrintInline = async function() {
     const isKitchen = (window.currentBillPreviewMode === 'KITCHEN');
-    const targetEl = isKitchen 
-        ? document.getElementById('liveKitchenTicketPreviewInline') 
-        : document.getElementById('liveBillPaperPreviewInline');
-
-    if (!targetEl) {
-        if (window.toast) window.toast.warning('Không tìm thấy nội dung mẫu in!');
-        else alert('Không tìm thấy nội dung mẫu in!');
-        return;
+    if (isKitchen) {
+        return window.testKitchenPrinterIpConnection();
+    } else {
+        return window.testPrinterIpConnection();
     }
-
-    const clone = targetEl.cloneNode(true);
-    clone.classList.remove('d-none');
-    const printContent = clone.outerHTML;
-
-    const paperSize = isKitchen 
-        ? (document.getElementById('sysKitchenPaperSizeSelect')?.value || '80mm')
-        : (document.getElementById('sysPaperSizeSelect')?.value || '80mm');
-    const paperWidth = (paperSize === '58mm') ? '58mm' : ((paperSize === 'A4') ? '210mm' : '80mm');
-    const titleText = isKitchen ? 'In Thử Phiếu Bếp' : 'In Thử Hóa Đơn';
-
-    const win = window.open('', '_blank', 'width=450,height=650');
-    win.document.write(`
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>${titleText} - NHÀ HÀNG CHAY HOA SEN</title>
-                <style>
-                    @page { 
-                        size: ${paperWidth} auto; 
-                        margin: 0; 
-                    }
-                    body { 
-                        margin: 0; 
-                        padding: 8px; 
-                        font-family: 'Courier New', Courier, monospace; 
-                        display: flex; 
-                        justify-content: center; 
-                    }
-                    #liveBillPaperPreviewInline, #liveKitchenTicketPreviewInline {
-                        width: 100% !important;
-                        box-shadow: none !important;
-                        border: none !important;
-                        padding: 0 !important;
-                        display: block !important;
-                    }
-                    img { max-width: 100%; height: auto; }
-                </style>
-            </head>
-            <body>
-                ${printContent}
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        setTimeout(function() { window.close(); }, 600);
-                    };
-                <\/script>
-            </body>
-        </html>
-    `);
-    win.document.close();
 };
 
 // 10. Nạp Cấu Hình Phân Quyền & Danh Sách Nhân Viên

@@ -16,6 +16,8 @@ window.initMembers = async function() {
     await window.loadPrepaidPackages();
     await window.loadMemberLunarInfo();
     await window.loadMemberStatsOverview();
+    await window.loadBirthdayGiftItems();
+    await window.loadBirthdayGiftSupervisionLogs();
     await window.loadMembersList();
     await window.loadMemberLogs();
     window.setupMemberSocketListeners();
@@ -48,6 +50,9 @@ window.switchMemberSubTab = function(tabId) {
         btn?.classList.add('active');
         btn?.classList.remove('text-secondary');
         window.loadTiersList();
+        window.loadMemberStatsOverview();
+        window.loadBirthdayGiftItems();
+        window.loadBirthdayGiftSupervisionLogs();
     } else if (tabId === 'tab-member-logs') {
         const btn = document.getElementById('tabBtnMemberLogs');
         btn?.classList.add('active');
@@ -184,9 +189,16 @@ window.loadMembersList = async function() {
         tbody.innerHTML = members.map(m => {
             const tierBadge = window.getTierBadgeHtml(m.Current_tier, m.tierInfo);
 
-            const birthdayBadge = (m.birthdayInfo && m.birthdayInfo.isBirthdaySoon)
-                ? `<span class="badge bg-danger-subtle text-danger border border-danger ms-1" title="Sinh nhật sắp tới!"><i class="fa-solid fa-cake-candles me-1"></i>Sinh nhật</span>`
-                : '';
+            let birthdayBadge = '';
+            if (m.birthdayInfo && m.birthdayInfo.isBirthdaySoon) {
+                if (m.birthdayInfo.hasReceivedGiftThisYear && m.birthdayInfo.giftRecord) {
+                    birthdayBadge = `<span class="badge bg-success-subtle text-success border border-success ms-1" title="Đã tặng quà SN: ${m.birthdayInfo.giftRecord.Gift_name} (Đơn #${m.birthdayInfo.giftRecord.Order_code})"><i class="fa-solid fa-cake-candles me-1"></i>Đã tặng SN (#${m.birthdayInfo.giftRecord.Order_code})</span>`;
+                } else {
+                    birthdayBadge = `<span class="badge bg-danger text-white ms-1" title="Tuần sinh nhật - Chưa nhận quà!"><i class="fa-solid fa-cake-candles me-1"></i>SN tuần này (Chưa tặng)</span>`;
+                }
+            } else if (m.birthdayInfo && m.birthdayInfo.hasReceivedGiftThisYear && m.birthdayInfo.giftRecord) {
+                birthdayBadge = `<span class="badge bg-light text-success border border-success-subtle ms-1" title="Đã nhận quà SN năm ${m.birthdayInfo.birthYear}: ${m.birthdayInfo.giftRecord.Gift_name} (Đơn #${m.birthdayInfo.giftRecord.Order_code})" style="font-size: 10px;">🎂 Đã tặng SN ${m.birthdayInfo.birthYear}</span>`;
+            }
 
             const birthText = m.Birthdate ? m.Birthdate.split('-').reverse().join('/') : '<span class="text-muted">Chưa có</span>';
 
@@ -196,8 +208,8 @@ window.loadMembersList = async function() {
                         <span class="badge bg-light text-dark font-monospace border fw-bold">${m.Card_code || 'HS-000'}</span>
                     </td>
                     <td>
-                        <div class="fw-bold text-dark d-flex align-items-center">
-                            ${m.Full_name}
+                        <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
+                            <span>${m.Full_name}</span>
                             ${birthdayBadge}
                         </div>
                         <small class="text-muted d-block text-truncate" style="max-width: 180px;">${m.Notes || 'Hội viên thân thiết'}</small>
@@ -229,7 +241,7 @@ window.loadMembersList = async function() {
                     <td class="small">${birthText}</td>
                     <td class="text-center">
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-success" onclick="window.openDigitalCardModal(${m.Member_id})" title="Xem thẻ điện tử & QR">
+                            <button class="btn btn-outline-success" onclick="window.openDigitalCardModal(${m.Member_id})" title="Xem thẻ điện tử, QR & Lịch sử quà sinh nhật">
                                 <i class="fa-solid fa-id-card"></i>
                             </button>
                             <button class="btn btn-outline-primary" onclick="window.openTopupPrepaidModal(${m.Member_id})" title="Nạp ví trả trước">
@@ -285,7 +297,7 @@ window.handleMemberSearch = function(e) {
     }
 };
 
-// 9. Render danh sách sinh nhật tuần này
+// 9. Render danh sách sinh nhật tuần này (Minh bạch trạng thái Đã tặng / Chưa tặng)
 window.renderUpcomingBirthdays = function(list) {
     const container = document.getElementById('upcomingBirthdaysContainer');
     const badge = document.getElementById('countUpcomingBirthdays');
@@ -304,19 +316,40 @@ window.renderUpcomingBirthdays = function(list) {
 
     container.innerHTML = list.map(m => {
         const b = m.birthdayInfo || {};
-        const bdayLabel = b.isBirthdayToday ? '<b class="text-danger">HÔM NAY!</b>' : `Còn ${b.daysUntil} ngày`;
+        const bdayLabel = b.isBirthdayToday ? '<b class="text-danger">HÔM NAY!</b>' : `Còn ${b.daysUntil} ngày (${b.dayMonth || m.Birthdate})`;
+        const hasGifted = Boolean(b.hasReceivedGiftThisYear && b.giftRecord);
+        const rec = b.giftRecord || {};
+
         return `
-            <div class="p-2 px-3 bg-white rounded-3 border d-flex justify-content-between align-items-center shadow-sm">
-                <div>
-                    <div class="fw-bold text-dark">${m.Full_name}</div>
-                    <small class="text-muted"><i class="fa-solid fa-phone me-1"></i>${m.Phone} | Sinh: ${m.Birthdate}</small>
+            <div class="p-2 px-3 bg-white rounded-3 border ${hasGifted ? 'border-success' : 'border-danger-subtle'} shadow-sm">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                        <div class="fw-bold text-dark d-flex align-items-center gap-1">
+                            <span>${m.Full_name}</span>
+                            ${hasGifted
+                                ? `<span class="badge bg-success text-white" style="font-size: 10px;"><i class="fa-solid fa-check me-1"></i>Đã tặng</span>`
+                                : `<span class="badge bg-warning text-dark" style="font-size: 10px;"><i class="fa-solid fa-hourglass-half me-1"></i>Chưa nhận quà</span>`
+                            }
+                        </div>
+                        <small class="text-muted d-block"><i class="fa-solid fa-phone me-1"></i>${m.Phone} | Sinh: ${m.Birthdate}</small>
+                    </div>
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">${bdayLabel}</span>
                 </div>
-                <div class="text-end">
-                    <span class="badge bg-danger text-white mb-1 d-block">${bdayLabel}</span>
-                    <button class="btn btn-sm btn-outline-danger py-0 px-2 fw-semibold" style="font-size: 11px;" onclick="window.sendBirthdayGift(${m.Member_id}, '${m.Full_name}')">
-                        <i class="fa-solid fa-gift me-1"></i> Tặng Quà
-                    </button>
-                </div>
+                ${hasGifted ? `
+                    <div class="mt-2 p-2 rounded-2 bg-success-subtle text-dark small" style="font-size: 11.5px;">
+                        <div>🎁 Đã tặng: <b class="text-danger">${rec.Gift_name}</b></div>
+                        <div class="text-secondary" style="font-size: 11px;">
+                            🧾 Đơn: <b>#${rec.Order_code}</b> (${rec.Table_number || 'Tại quán'}) • NV: <b>${rec.Staff_name || '---'}</b>
+                        </div>
+                    </div>
+                ` : `
+                    <div class="mt-2 pt-1 border-top d-flex justify-content-between align-items-center">
+                        <small class="text-danger fw-semibold" style="font-size: 11px;">Đủ điều kiện tặng 1 món (0đ)</small>
+                        <button class="btn btn-sm btn-danger py-0 px-2 fw-bold shadow-xs" style="font-size: 11px;" onclick="window.goToCartForBirthdayGift('${m.Phone}', '${(m.Full_name || '').replace(/'/g, "\\'")}')">
+                            <i class="fa-solid fa-cart-plus me-1"></i> Chọn Quà Tại Giỏ Hàng
+                        </button>
+                    </div>
+                `}
             </div>
         `;
     }).join('');
@@ -560,6 +593,53 @@ window.openDigitalCardModal = async function(id) {
         if (qrImg) {
             const qrData = encodeURIComponent(`HOASEN-MEM:${m.Phone}:${m.Card_code}`);
             qrImg.src = `https://quickchart.io/qr?text=${qrData}&size=180&margin=1`;
+        }
+
+        // Render lịch sử nhận quà tặng sinh nhật trong tài khoản khách hàng
+        const bdayListEl = document.getElementById('cardBirthdayGiftsList');
+        if (bdayListEl) {
+            const b = m.birthdayInfo || {};
+            const giftLogs = data.birthdayGiftLogs || b.allGiftLogs || [];
+            let statusBanner = '';
+            if (b.isBirthdaySoon) {
+                if (b.hasReceivedGiftThisYear && b.giftRecord) {
+                    statusBanner = `
+                        <div class="alert alert-success py-1 px-2 mb-2 small border-success">
+                            ✅ <b>Sinh nhật năm ${b.birthYear}:</b> Đã nhận món <b>${b.giftRecord.Gift_name}</b> theo đơn <b>#${b.giftRecord.Order_code}</b>
+                        </div>
+                    `;
+                } else {
+                    statusBanner = `
+                        <div class="alert alert-danger py-1 px-2 mb-2 small border-danger d-flex justify-content-between align-items-center">
+                            <span>🎂 <b>Tuần sinh nhật (${b.dayMonth || ''}):</b> Chưa nhận quà năm ${b.birthYear}!</span>
+                            <button type="button" class="btn btn-sm btn-danger py-0 px-2 fw-bold" style="font-size: 11px;" onclick="window.closeMemberModalElement('digitalCardModal'); window.goToCartForBirthdayGift('${m.Phone}', '${(m.Full_name || '').replace(/'/g, "\\'")}')">
+                                Đặt quà 0đ
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+
+            if (giftLogs.length === 0) {
+                bdayListEl.innerHTML = `${statusBanner}<small class="text-muted">Chưa có lịch sử nhận quà tặng sinh nhật nào.</small>`;
+            } else {
+                bdayListEl.innerHTML = statusBanner + giftLogs.map(g => {
+                    const isCancelled = (g.Order_status === 'CANCELLED' || g.Status === 'CANCELLED');
+                    return `
+                        <div class="py-1 border-bottom d-flex justify-content-between align-items-start small">
+                            <div>
+                                <div class="fw-bold ${isCancelled ? 'text-decoration-line-through text-muted' : 'text-danger'}">
+                                    🎁 ${g.Gift_name} <span class="badge bg-light text-dark border ms-1">Năm ${g.Birth_year}</span>
+                                </div>
+                                <small class="text-muted d-block">
+                                    Đơn: <b class="text-dark">#${g.Order_code}</b> (${g.Table_number || 'Tại quán'}) • NV: ${g.Staff_name || '---'} • ${g.Gifted_at || ''}
+                                </small>
+                            </div>
+                            <span class="badge ${isCancelled ? 'bg-secondary' : 'bg-success'}">${isCancelled ? 'Đơn đã hủy' : 'Đã nhận (0đ)'}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
         }
 
         // Render lịch sử giao dịch
@@ -1031,11 +1111,19 @@ window.doCustomerLookup = async function(explicitPhone) {
 
         let bdayHtml = '';
         if (b.isBirthdaySoon) {
-            bdayHtml = `
-                <div class="alert alert-danger py-2 mb-2 small text-center fw-bold rounded-3">
-                    🎂 Chúc Mừng Sinh Nhật Quý Khách! Đặc quyền: ${t.birthdayReward || 'Món quà tri ân'}
-                </div>
-            `;
+            if (b.hasReceivedGiftThisYear && b.giftRecord) {
+                bdayHtml = `
+                    <div class="alert alert-success py-2 mb-2 small text-center fw-bold rounded-3">
+                        🎂 Tuần Sinh Nhật (${b.dayMonth}) — Đã nhận quà: <b>${b.giftRecord.Gift_name}</b> (Đơn #${b.giftRecord.Order_code})
+                    </div>
+                `;
+            } else {
+                bdayHtml = `
+                    <div class="alert alert-danger py-2 mb-2 small text-center fw-bold rounded-3">
+                        🎂 Chúc Mừng Sinh Nhật (${b.dayMonth})! Đủ điều kiện nhận 01 món quà sinh nhật (0đ) trên Giỏ Hàng!
+                    </div>
+                `;
+            }
         }
 
         resArea.innerHTML = `
@@ -1086,11 +1174,23 @@ window.openNewMemberWithPhone = function(phone) {
     if (phoneInput) phoneInput.value = phone;
 };
 
-// 18. Tặng quà sinh nhật cho hội viên
-window.sendBirthdayGift = function(id, name) {
-    if (window.toast) {
-        window.toast.success(`Đã kích hoạt ưu đãi tặng quà sinh nhật cho Quý khách "${name}"! Nhân viên thu ngân vui lòng in voucher hoặc phục vụ tráng miệng.`);
+// 18. Chuyển nhanh sang Giỏ Hàng để nhân viên hỏi khách & chọn món quà sinh nhật (0đ)
+window.goToCartForBirthdayGift = function(phone, fullName) {
+    if (phone) {
+        sessionStorage.setItem('hoasen_prefill_member_phone', phone);
     }
+    if (window.toast) {
+        window.toast.info(`Đang mở Giỏ Hàng cho hội viên "${fullName || phone}". Vui lòng xác thực thẻ và chọn món quà sinh nhật (0đ)!`);
+    }
+    if (typeof window.navigateTo === 'function') {
+        window.navigateTo('/cart');
+    } else {
+        window.location.href = '/cart';
+    }
+};
+
+window.sendBirthdayGift = function(id, name) {
+    window.goToCartForBirthdayGift('', name);
 };
 
 // 19. Bật/tắt sự kiện x2 điểm (Lễ hội chay)
@@ -1208,6 +1308,17 @@ window.setupMemberSocketListeners = function() {
         window.loadMemberTierConfig();
         window.loadTiersList();
         window.loadMembersList();
+    });
+
+    socket.on('birthday_gift_items_updated', () => {
+        window.loadBirthdayGiftItems();
+    });
+
+    socket.on('birthday_gift_recorded', () => {
+        window.loadMemberStatsOverview();
+        window.loadBirthdayGiftSupervisionLogs();
+        window.loadMembersList();
+        window.loadMemberLogs();
     });
 };
 
@@ -1588,7 +1699,11 @@ window.loadMemberLogs = async function() {
 
         tbody.innerHTML = logs.map(log => {
             let actionBadge = `<span class="badge bg-secondary">${log.Action_type}</span>`;
-            if (log.Action_type === 'TIER_MANUAL_CHANGE') {
+            if (log.Action_type === 'BIRTHDAY_GIFT') {
+                actionBadge = `<span class="badge bg-danger text-white fw-bold">🎂 Tặng Quà Sinh Nhật</span>`;
+            } else if (log.Action_type && log.Action_type.startsWith('BDAY_GIFT_ITEM')) {
+                actionBadge = `<span class="badge bg-secondary text-white fw-bold">🎁 Menu Quà Sinh Nhật</span>`;
+            } else if (log.Action_type === 'TIER_MANUAL_CHANGE') {
                 actionBadge = `<span class="badge bg-warning text-dark fw-bold">⭐ Đổi Hạng Thủ Công</span>`;
             } else if (log.Action_type === 'TIER_UPGRADE_AUTO') {
                 actionBadge = `<span class="badge bg-success fw-bold">🚀 Tự Động Thăng Hạng</span>`;
@@ -1605,7 +1720,9 @@ window.loadMemberLogs = async function() {
             }
 
             let diffText = '';
-            if (log.Old_tier || log.New_tier) {
+            if (log.Action_type === 'BIRTHDAY_GIFT') {
+                diffText = `<span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold">🎁 Tặng 01 phần (0đ)</span>`;
+            } else if (log.Old_tier || log.New_tier) {
                 diffText = `<span class="badge bg-light text-dark border">${log.Old_tier || '---'}</span> <i class="fa-solid fa-arrow-right text-muted mx-1"></i> <span class="badge bg-success text-white">${log.New_tier || '---'}</span>`;
             } else if (log.Old_value !== null || log.New_value !== null) {
                 const isMoney = (log.Action_type === 'SPENT_ADJUST' || log.Action_type === 'PREPAID_TOPUP');
@@ -1639,3 +1756,212 @@ window.loadMemberLogs = async function() {
         if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Lỗi: ${e.message}</td></tr>`;
     }
 };
+
+// ========================================================
+// PHẦN 26: QUẢN LÝ MENU QUÀ TẶNG SINH NHẬT & GIÁM SÁT TẶNG/NHẬN
+// ========================================================
+window.cachedBirthdayGiftItems = [];
+
+window.loadBirthdayGiftItems = async function() {
+    const tbody = document.getElementById('birthdayGiftItemsTableTbody');
+    if (!tbody) return;
+
+    try {
+        const res = await fetch('/api/members/birthday-gifts/items?includeInactive=1&t=' + Date.now());
+        if (!res.ok) throw new Error('Không thể tải danh sách món quà sinh nhật');
+        const data = await res.json();
+        const items = data.items || [];
+        window.cachedBirthdayGiftItems = items;
+
+        if (items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center py-3 text-muted">Chưa có món quà sinh nhật nào. Nhấn "+ Thêm Món Quà" để lưu.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = items.map(item => {
+            const isActive = Number(item.Is_active) === 1;
+            const statusBadge = isActive
+                ? `<span class="badge bg-success-subtle text-success border border-success-subtle">Đang áp dụng</span>`
+                : `<span class="badge bg-secondary-subtle text-secondary border">Tạm ẩn</span>`;
+            const refPriceFmt = Number(item.Ref_price || 0).toLocaleString('vi-VN') + ' đ';
+
+            return `
+                <tr>
+                    <td>
+                        <div class="fw-bold text-dark">🎁 ${item.Gift_name}</div>
+                        ${item.Description ? `<small class="text-muted d-block" style="font-size: 11px;">${item.Description}</small>` : ''}
+                    </td>
+                    <td class="text-end">
+                        <span class="text-decoration-line-through text-muted small me-1">${refPriceFmt}</span>
+                        <span class="badge bg-danger text-white">0đ</span>
+                    </td>
+                    <td class="text-center">${statusBadge}</td>
+                    <td class="text-center">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-dark" onclick="window.openBirthdayGiftItemModal(${item.Gift_id})" title="Chỉnh sửa món quà">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="window.deleteBirthdayGiftItem(${item.Gift_id}, '${(item.Gift_name || '').replace(/'/g, "\\'")}')" title="Xóa món quà">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Lỗi loadBirthdayGiftItems:', e);
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-3">Lỗi: ${e.message}</td></tr>`;
+    }
+};
+
+window.openBirthdayGiftItemModal = function(giftId = null) {
+    const idEl = document.getElementById('editBdayGiftId');
+    const nameEl = document.getElementById('editBdayGiftName');
+    const priceEl = document.getElementById('editBdayGiftRefPrice');
+    const sortEl = document.getElementById('editBdayGiftSort');
+    const descEl = document.getElementById('editBdayGiftDesc');
+    const activeEl = document.getElementById('editBdayGiftActive');
+    const titleEl = document.getElementById('birthdayGiftItemModalTitle');
+
+    if (giftId) {
+        const item = window.cachedBirthdayGiftItems.find(x => Number(x.Gift_id) === Number(giftId));
+        if (!item) return;
+        if (idEl) idEl.value = item.Gift_id;
+        if (nameEl) nameEl.value = item.Gift_name || '';
+        if (priceEl) priceEl.value = item.Ref_price || 0;
+        if (sortEl) sortEl.value = item.Sort_order || 1;
+        if (descEl) descEl.value = item.Description || '';
+        if (activeEl) activeEl.checked = Number(item.Is_active) === 1;
+        if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>Sửa Món Quà Sinh Nhật`;
+    } else {
+        if (idEl) idEl.value = '';
+        if (nameEl) nameEl.value = '';
+        if (priceEl) priceEl.value = '45000';
+        if (sortEl) sortEl.value = (window.cachedBirthdayGiftItems.length + 1);
+        if (descEl) descEl.value = 'Phần quà tráng miệng tri ân hội viên dịp sinh nhật (Tặng 0đ)';
+        if (activeEl) activeEl.checked = true;
+        if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-gift me-2"></i>Thêm Món Quà Tặng Sinh Nhật`;
+    }
+
+    window.openMemberModalElement('birthdayGiftItemModal');
+};
+
+window.saveBirthdayGiftItem = async function(event) {
+    event.preventDefault();
+    const id = document.getElementById('editBdayGiftId')?.value;
+    const Gift_name = document.getElementById('editBdayGiftName')?.value?.trim();
+    const Ref_price = Number(document.getElementById('editBdayGiftRefPrice')?.value || 0);
+    const Sort_order = Number(document.getElementById('editBdayGiftSort')?.value || 1);
+    const Description = document.getElementById('editBdayGiftDesc')?.value?.trim() || '';
+    const Is_active = document.getElementById('editBdayGiftActive')?.checked ? 1 : 0;
+
+    if (!Gift_name) {
+        if (window.toast) window.toast.warning('Vui lòng nhập tên món quà tặng sinh nhật!');
+        return;
+    }
+
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('hoasen_user') || '{}');
+    const Staff_name = currentUser.Full_name || currentUser.User_name || 'Quản Lý';
+
+    try {
+        const url = id ? `/api/members/birthday-gifts/items/${id}` : '/api/members/birthday-gifts/items';
+        const method = id ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Gift_name, Ref_price, Sort_order, Description, Is_active, Staff_name })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Không thể lưu món quà');
+
+        if (window.toast) window.toast.success(data.message || 'Đã lưu món quà sinh nhật!');
+        window.closeMemberModalElement('birthdayGiftItemModal');
+        await window.loadBirthdayGiftItems();
+    } catch (e) {
+        if (window.toast) window.toast.error(e.message);
+    }
+};
+
+window.deleteBirthdayGiftItem = async function(giftId, giftName) {
+    if (!confirm(`Bạn có chắc chắn muốn xóa món quà sinh nhật "${giftName}" khỏi danh sách?`)) return;
+
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('hoasen_user') || '{}');
+    const Staff_name = currentUser.Full_name || currentUser.User_name || 'Quản Lý';
+
+    try {
+        const res = await fetch(`/api/members/birthday-gifts/items/${giftId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Staff_name })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Xóa thất bại');
+
+        if (window.toast) window.toast.success(data.message || 'Đã xóa món quà sinh nhật!');
+        await window.loadBirthdayGiftItems();
+    } catch (e) {
+        if (window.toast) window.toast.error(e.message);
+    }
+};
+
+window.loadBirthdayGiftSupervisionLogs = async function() {
+    const tbody = document.getElementById('birthdayGiftLogsTableTbody');
+    if (!tbody) return;
+
+    try {
+        const res = await fetch('/api/members/birthday-gifts/logs?limit=100&t=' + Date.now());
+        if (!res.ok) throw new Error('Không thể tải lịch sử giám sát quà sinh nhật');
+        const data = await res.json();
+        const logs = data.logs || [];
+
+        if (logs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">
+                        <i class="fa-solid fa-cake-candles fa-lg mb-1 d-block text-secondary"></i>
+                        Chưa có bản ghi tặng quà sinh nhật nào. Khi nhân viên chọn món quà trên Giỏ Hàng và chốt đơn, hệ thống sẽ tự động ghi nhận minh bạch tại đây.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = logs.map(g => {
+            const isCancelled = (g.Order_status === 'CANCELLED' || g.Status === 'CANCELLED');
+            const statusBadge = isCancelled
+                ? `<span class="badge bg-secondary">Đơn đã hủy</span>`
+                : `<span class="badge bg-success"><i class="fa-solid fa-check me-1"></i>Đã tặng (Năm ${g.Birth_year})</span>`;
+
+            return `
+                <tr>
+                    <td class="small text-muted font-monospace">${g.Gifted_at || ''}</td>
+                    <td>
+                        <div class="fw-bold text-dark">${g.Member_name || 'Hội viên'}</div>
+                        <small class="text-muted font-monospace">${g.Member_phone || ''} ${g.Birthdate ? `(SN: ${g.Birthdate})` : ''}</small>
+                    </td>
+                    <td>
+                        <div class="fw-bold ${isCancelled ? 'text-decoration-line-through text-muted' : 'text-danger'}">
+                            🎁 ${g.Gift_name}
+                        </div>
+                        ${statusBadge}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border font-monospace fw-bold">#${g.Order_code}</span>
+                        <small class="text-muted d-block">${g.Table_number || 'Tại quán'}</small>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-secondary border fw-semibold">
+                            <i class="fa-solid fa-user-check me-1 text-success"></i>${g.Staff_name || 'Nhân viên'}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Lỗi loadBirthdayGiftSupervisionLogs:', e);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-3">Lỗi: ${e.message}</td></tr>`;
+    }
+};
+

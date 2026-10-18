@@ -1,5 +1,5 @@
 // Kết nối Socket.IO linh hoạt theo IP máy chủ (Wifi LAN / Localhost)
-window.socket = typeof io === 'function' ? io(window.location.origin) : null;
+window.socket = window.socket || (typeof io === 'function' ? io(window.location.origin) : null);
 
 // Biến trạng thái toàn cục (Chỉ khai báo 1 lần duy nhất)
 var isMuted = false;
@@ -86,6 +86,15 @@ window.initKitchen = async function() {
     if (typeof window.checkKitchenAudioStatus === 'function') {
         window.checkKitchenAudioStatus();
     }
+
+    // Safety Polling dự phòng: tự động kiểm tra đơn mới mỗi 12 giây nếu đang ở tab Chờ Nấu
+    if (!window._kitchenSafetyPollTimer) {
+        window._kitchenSafetyPollTimer = setInterval(() => {
+            if (currentKitchenTab === 'PENDING') {
+                loadKitchenOrders();
+            }
+        }, 12000);
+    }
 };
 
 // Chuyển đổi giữa 3 Tab: Đơn Chờ Chế Biến, Lịch Sử Đơn Bếp & Nhật Ký Của Tôi
@@ -163,7 +172,7 @@ window.loadMyKitchenLogs = async function() {
         tbody.innerHTML = logs.map(log => {
             const timeStr = log.Created_at ? log.Created_at.replace('T', ' ').substring(0, 19) : '--:--';
             const tableStr = log.Table_number ? `Bàn #${log.Table_number}` : 'Đơn mang về';
-            const codeStr = log.Order_code || (`#${log.Order_id}`);
+            const codeStr = log.Order_code || (`CHAY-${log.Order_id}`);
 
             let itemsDetailHtml = '';
             if (Array.isArray(log.items) && log.items.length > 0) {
@@ -205,14 +214,19 @@ window.loadMyKitchenLogs = async function() {
 // 1. Tải danh sách đơn chờ chế biến
 async function loadKitchenOrders() {
     try {
-        const res = await fetch('/api/kitchen/pending-orders');
+        const res = await fetch('/api/kitchen/pending-orders?t=' + Date.now(), {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
         if (!res.ok) throw new Error('Lỗi tải dữ liệu');
         const orders = await res.json();
         window.kitchenOrdersCache = Array.isArray(orders) ? orders : [];
         renderKitchenCards(window.kitchenOrdersCache);
     } catch (err) {
         console.error('Lỗi nạp đơn bếp:', err);
-        renderKitchenCards([]);
+        if (!Array.isArray(window.kitchenOrdersCache)) {
+            renderKitchenCards([]);
+        }
     }
 }
 
@@ -612,10 +626,11 @@ function renderKitchenHistoryTable(orders) {
             : `<span class="badge bg-success"><i class="fa-solid fa-check me-1"></i>Đã Xong</span>`;
 
         const itemsStr = (o.Items || []).map(i => `<span class="badge bg-light text-dark border me-1">${i.Item_name} x${i.Quantity}</span>`).join(' ');
+        const displayCode = o.Order_code || (`CHAY-` + (o.Order_id || ''));
 
         return `
             <tr>
-                <td class="fw-bold">${o.Order_id || o.Order_code}</td>
+                <td class="fw-bold text-success" style="font-family: monospace; font-size: 14.5px;">${displayCode}</td>
                 <td><span class="badge bg-info text-dark fw-bold">${o.Table_name || o.Table_id || 'Bàn Ăn'}</span></td>
                 <td>${itemsStr}</td>
                 <td><small class="text-muted">${o.Created_at || 'N/A'}</small></td>
@@ -632,13 +647,56 @@ function setupSocketListeners() {
     }
     if (!window.socket) return;
     
-    // 1. Khi có đơn mới tới hoặc có đơn được sửa -> Báo chuông & Nạp lại đơn & Đọc thông báo giọng nói
-    window.socket.off('kitchen_new_order');
-    window.socket.on('kitchen_new_order', (orderData) => {
+    // 1. Khi có đơn mới tới hoặc có đơn được sửa -> Hiện ngay lập tức trong 0.01s & Báo chuông & Đồng bộ CSDL
+    const onKitchenNewOrder = (orderData) => {
         console.log('🔔 [Kitchen Socket] Đã nhận đơn hàng mới:', orderData);
-        triggerKitchenNotification(orderData);
-        if (currentKitchenTab === 'PENDING') loadKitchenOrders();
 
+        // 🌟 BƯỚC 1: CẬP NHẬT TỨC THÌ (REALTIME OPTIMISTIC UPDATE) TRÊN MÀN HÌNH BẾP NGAY 0.01 GIÂY
+        if (orderData && (orderData.Order_id || orderData.Order_code)) {
+            if (!Array.isArray(window.kitchenOrdersCache)) {
+                window.kitchenOrdersCache = [];
+            }
+            const oCode = String(orderData.Order_code || orderData.Order_id || '').trim();
+            const oId = String(orderData.Order_id || '').trim();
+            const existIdx = window.kitchenOrdersCache.findIndex(o => 
+                (oId && String(o.Order_id) === oId) || 
+                (oCode && String(o.Order_code || o.Order_id) === oCode)
+            );
+            const normalizedItems = Array.isArray(orderData.Items) ? orderData.Items : (Array.isArray(orderData.items) ? orderData.items : []);
+            const newOrderCard = {
+                ...orderData,
+                Items: normalizedItems,
+                items: normalizedItems,
+                Status: orderData.Status || 'PROCESSING'
+            };
+            if (existIdx >= 0) {
+                window.kitchenOrdersCache[existIdx] = { ...window.kitchenOrdersCache[existIdx], ...newOrderCard };
+            } else {
+                window.kitchenOrdersCache.unshift(newOrderCard);
+            }
+            if (currentKitchenTab === 'PENDING') {
+                renderKitchenCards(window.kitchenOrdersCache);
+            }
+        }
+
+        // 🌟 BƯỚC 2: PHÁT CHUÔNG BÁO VÀ THÔNG BÁO GIỌNG ĐỌC NGAY LẬP TỨC
+        try {
+            triggerKitchenNotification(orderData);
+        } catch(eNotify) {
+            console.warn('Lỗi triggerKitchenNotification:', eNotify);
+        }
+
+        // 🌟 BƯỚC 2.5: ĐÁNH THỨC ĐIỆN THOẠI / MÀN HÌNH BẾP NẾU CHẠY TRONG APP ANDROID
+        if (window.Android && typeof window.Android.wakeUp === 'function') {
+            try { window.Android.wakeUp(10); } catch(e) {}
+        }
+
+        // 🌟 BƯỚC 3: ĐỒNG BỘ CHÍNH XÁC TOÀN BỘ TỪ SERVER CSDL
+        if (currentKitchenTab === 'PENDING') {
+            loadKitchenOrders();
+        }
+
+        // Hiển thị Toast thông báo
         if (orderData && (orderData.Is_add_more || orderData.Is_edited === 2)) {
             if (window.toast) window.toast.warning(`🔔 Bàn [${orderData.Table_name || orderData.Table_number || 'Khách'}] vừa GỌI THÊM MÓN!`);
         } else if (orderData && orderData.Is_edited === 1) {
@@ -648,7 +706,7 @@ function setupSocketListeners() {
             if (window.toast) window.toast.success(`🔔 Có đơn mới từ [${srcName}]!`);
         }
 
-        // Kiểm tra cấu hình: Tự động in bill bếp
+        // Tự động in bill bếp nếu cấu hình bật
         try {
             const sysConfig = JSON.parse(localStorage.getItem('hoasen_system_config') || '{}');
             if (sysConfig.autoPrintKitchen) {
@@ -659,17 +717,20 @@ function setupSocketListeners() {
                 }, 500);
             }
         } catch (e) {}
-    });
+    };
 
-    // 2. Khi cập nhật trạng thái (Bếp bấm xong hoặc thu ngân thanh toán) -> Chỉ nạp lại danh sách, KHÔNG reo chuông bếp
-    window.socket.off('order_status_updated');
-    window.socket.on('order_status_updated', () => {
+    window.socket.off('kitchen_new_order', onKitchenNewOrder);
+    window.socket.on('kitchen_new_order', onKitchenNewOrder);
+
+    // 2. Khi cập nhật trạng thái (Bếp bấm xong hoặc thu ngân thanh toán) -> Chỉ nạp lại danh sách
+    const onOrderStatusUpdated = () => {
         if (currentKitchenTab === 'PENDING') loadKitchenOrders();
-    });
+    };
+    window.socket.off('order_status_updated', onOrderStatusUpdated);
+    window.socket.on('order_status_updated', onOrderStatusUpdated);
 
-    // Lắng nghe cập nhật cấu hình hệ thống realtime từ máy tính Admin
-    window.socket.off('system_config_updated');
-    window.socket.on('system_config_updated', (newConfig) => {
+    // 3. Lắng nghe cập nhật cấu hình hệ thống realtime từ máy tính Admin
+    const onSystemConfigUpdated = (newConfig) => {
         if (newConfig) {
             const cur = JSON.parse(localStorage.getItem('hoasen_system_config') || '{}');
             const merged = { ...cur, ...newConfig };
@@ -684,18 +745,22 @@ function setupSocketListeners() {
                 }
             }
         }
-    });
+    };
+    window.socket.off('system_config_updated', onSystemConfigUpdated);
+    window.socket.on('system_config_updated', onSystemConfigUpdated);
 
-    window.socket.off('kitchen_order_accepted');
-    window.socket.on('kitchen_order_accepted', () => {
+    // 4. Khi Bếp chấp nhận đơn hàng
+    const onKitchenOrderAccepted = () => {
         if (currentKitchenTab === 'PENDING') loadKitchenOrders();
-    });
+    };
+    window.socket.off('kitchen_order_accepted', onKitchenOrderAccepted);
+    window.socket.on('kitchen_order_accepted', onKitchenOrderAccepted);
 
-    // 2. KHI CÓ ĐƠN BỊ HỦY -> BIẾN MẤT TỨC THÌ TRÊN MÀN HÌNH KHÔNG CẦN F5
-    window.socket.off('kitchen_order_cancelled');
-    window.socket.on('kitchen_order_cancelled', (data) => {
+    // 5. Khi có đơn bị hủy -> Biến mất tức thì trên màn hình không cần F5
+    const onKitchenOrderCancelled = (data) => {
         const orderId = data ? data.Order_id : null;
-        const cardEl = orderId ? document.getElementById(`kitchen-card-${orderId}`) : null;
+        const oCode = data ? (data.Order_code || data.Order_id) : null;
+        const cardEl = orderId ? (document.getElementById(`kitchen-card-${orderId}`) || (oCode ? document.getElementById(`kitchen-card-${oCode}`) : null)) : null;
         if (cardEl) {
             cardEl.style.transition = 'all 0.3s ease';
             cardEl.style.transform = 'scale(0)';
@@ -704,7 +769,9 @@ function setupSocketListeners() {
             setTimeout(() => {
                 cardEl.remove();
                 if (Array.isArray(window.kitchenOrdersCache)) {
-                    window.kitchenOrdersCache = window.kitchenOrdersCache.filter(o => o.Order_id !== orderId);
+                    window.kitchenOrdersCache = window.kitchenOrdersCache.filter(o => 
+                        String(o.Order_id) !== String(orderId) && String(o.Order_code) !== String(oCode)
+                    );
                     const countBadge = document.getElementById('kitchenPendingCount');
                     if (countBadge) countBadge.innerText = window.kitchenOrdersCache.length;
                 }
@@ -716,7 +783,9 @@ function setupSocketListeners() {
         } else {
             if (currentKitchenTab === 'PENDING') loadKitchenOrders();
         }
-    });
+    };
+    window.socket.off('kitchen_order_cancelled', onKitchenOrderCancelled);
+    window.socket.on('kitchen_order_cancelled', onKitchenOrderCancelled);
 }
 
 // Khởi tạo AudioContext toàn cục cho iOS & Trình duyệt
@@ -757,6 +826,9 @@ window.unlockKitchenAudioFromBanner = function() {
 var _audioUnlockElement = null;
 
 function unlockIOSAudio() {
+    if (window.SoundService && typeof window.SoundService.unlockAudio === 'function') {
+        window.SoundService.unlockAudio();
+    }
     if (!iosAudioCtx) {
         iosAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -861,7 +933,7 @@ function getKitchenCustomSoundForOrder(orderData, sysConfig) {
     return '';
 }
 
-// Phát âm thanh thông báo Bếp (Chuẩn hóa giống 100% như màn hình Nhận Món)
+// Phát âm thanh thông báo Bếp (Chuẩn hóa: File âm thanh riêng + Chuông đanh vang + Giọng đọc)
 window.triggerKitchenNotification = function(orderData) {
     if (typeof isMuted !== 'undefined' && isMuted) return;
 
@@ -871,10 +943,11 @@ window.triggerKitchenNotification = function(orderData) {
 
         const customUrl = getKitchenCustomSoundForOrder(orderData, sysConfig);
 
-        // 🌟 NẾU CÓ FILE ÂM THANH RIÊNG (Grab, Shopee, Be, Sửa đơn, Bàn, Mang về...)
-        if (customUrl) {
-            console.log('🔊 [Kitchen] Phát file âm thanh riêng cho đơn:', customUrl);
-            if (window.SoundService && typeof window.SoundService.playAlertSound === 'function') {
+        // 🌟 1. PHÁT FILE ÂM THANH RIÊNG CHO TỪNG LOẠI ĐƠN (Grab, Shopee, Be, Gọi thêm, Bàn, Mang về...)
+        let soundPlayed = false;
+        if (customUrl && window.SoundService && typeof window.SoundService.playAlertSound === 'function') {
+            try {
+                console.log('🔊 [Kitchen] Phát file âm thanh riêng cho đơn:', customUrl);
                 window.SoundService.playAlertSound({
                     type: 'custom_file',
                     customUrl: customUrl,
@@ -882,27 +955,35 @@ window.triggerKitchenNotification = function(orderData) {
                     repeatCount: sysConfig.kitchenRepeatCount || 1,
                     repeatInterval: sysConfig.kitchenRepeatInterval || 2
                 });
-                return;
+                soundPlayed = true;
+            } catch(eCustom) {
+                console.warn('Lỗi phát custom sound, fallback:', eCustom);
+                soundPlayed = false;
             }
         }
 
-        // 🌟 NẾU CHƯA CÓ FILE RIÊNG: Phát chuông mặc định của Bếp (kèm giọng đọc nếu bật)
-        if (window.SoundService && typeof window.SoundService.playAlertSound === 'function') {
-            window.SoundService.playAlertSound({
-                type: sysConfig.kitchenSoundType || 'kitchen_bell',
-                customUrl: sysConfig.kitchenCustomSoundUrl || '',
-                volume: sysConfig.kitchenSoundVolume ?? 90,
-                repeatCount: sysConfig.kitchenRepeatCount || 1,
-                repeatInterval: sysConfig.kitchenRepeatInterval || 2
-            });
-
-            if (sysConfig.voiceNotificationEnabled !== false) {
-                setTimeout(() => {
-                    announceKitchenOrderVoice(orderData);
-                }, 600);
+        // 🌟 2. NẾU CHƯA CÓ FILE RIÊNG HOẶC PHÁT LỖI -> LUÔN PHÁT CHUÔNG BẾP TỔNG HỢP WEB AUDIO API ĐANH VANG
+        if (!soundPlayed) {
+            if (window.SoundService && typeof window.SoundService.playAlertSound === 'function') {
+                window.SoundService.playAlertSound({
+                    type: sysConfig.kitchenSoundType || 'kitchen_bell',
+                    customUrl: sysConfig.kitchenCustomSoundUrl || '',
+                    volume: sysConfig.kitchenSoundVolume ?? 90,
+                    repeatCount: sysConfig.kitchenRepeatCount || 2,
+                    repeatInterval: sysConfig.kitchenRepeatInterval || 2
+                });
+            } else {
+                playKitchenBell();
             }
-            return;
         }
+
+        // 🌟 3. PHÁT GIỌNG ĐỌC TIẾNG VIỆT THÔNG BÁO CHO ĐẦU BẾP (Bật mặc định)
+        if (sysConfig.voiceNotificationEnabled !== false) {
+            setTimeout(() => {
+                announceKitchenOrderVoice(orderData);
+            }, 800);
+        }
+        return;
     } catch (e) {
         console.warn('Lỗi triggerKitchenNotification:', e);
     }
@@ -1021,12 +1102,13 @@ function announceKitchenOrderVoice(orderData) {
 }
 
 // Hàm in phiếu chế biến cho Bếp (Ticket Bếp)
-window.printKitchenTicket = function(order) {
+window.printKitchenTicket = async function(order) {
     if (!order) return;
     try {
         const sysConfig = JSON.parse(localStorage.getItem('hoasen_system_config') || '{}');
         const paperSize = sysConfig.kitchen_paper_size || sysConfig.paperSize || '80mm';
         const paperWidth = (paperSize === '58mm') ? '58mm' : '80mm';
+        const resName = sysConfig.resName || 'NHÀ HÀNG CHAY HOA SEN';
 
         let targetOrder = order;
         if (Array.isArray(window.kitchenOrdersCache) && order.Order_id) {
@@ -1055,9 +1137,7 @@ window.printKitchenTicket = function(order) {
             `;
         }).join('');
 
-        const win = window.open('', '_blank', 'width=420,height=600');
-        if (!win) return;
-        win.document.write(`
+        const ticketHtml = `
             <!DOCTYPE html>
             <html>
                 <head>
@@ -1076,16 +1156,37 @@ window.printKitchenTicket = function(order) {
                     <div>${itemsHtml}</div>
                     ${note ? `<div style="margin-top: 8px; padding: 6px; border: 1px solid #000; font-weight: bold; font-size: 12px;">GHI CHÚ: ${note}</div>` : ''}
                     <hr style="border: 1px solid #000; margin: 6px 0;">
-                    <script>
-                        window.onload = function() {
-                            window.print();
-                            setTimeout(function() { window.close(); }, 600);
-                        };
-                    <\/script>
                 </body>
             </html>
-        `);
-        win.document.close();
+        `;
+
+        const escposPayload = {
+            type: 'KITCHEN',
+            paperSize,
+            resName,
+            title: 'PHIEU BEP CHE BIEN',
+            orderCode,
+            tableName,
+            staffName: targetOrder.Staff_name || 'Bep',
+            timeStr,
+            items: items.map(it => ({
+                name: it.Item_name || it.name || 'Mon chay',
+                qty: Number(it.Quantity || it.quantity || 1),
+                toppings: it.Toppings || it.toppings || '',
+                note: it.Note || it.note || ''
+            })),
+            note
+        };
+
+        if (typeof window.printThermalHtml === 'function') {
+            await window.printThermalHtml(ticketHtml, {
+                paperWidth,
+                printerRole: 'KITCHEN',
+                escposPayload
+            });
+        } else {
+            window.print();
+        }
     } catch (err) {
         console.error('Lỗi in phiếu bếp:', err);
     }

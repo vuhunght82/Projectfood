@@ -53,6 +53,11 @@
 
     // Kích hoạt giữ màn hình sáng
     window.requestScreenWakeLock = async function() {
+        // 0. Gọi Native Android Interface nếu chạy trong App
+        if (window.Android && typeof window.Android.keepScreenOn === 'function') {
+            try { window.Android.keepScreenOn(true); } catch(e) {}
+        }
+
         // 1. Thử dùng Native Web Screen Wake Lock API
         if ('wakeLock' in navigator) {
             try {
@@ -109,6 +114,9 @@
 
     // Tắt giữ màn hình sáng
     window.releaseScreenWakeLock = async function() {
+        if (window.Android && typeof window.Android.keepScreenOn === 'function') {
+            try { window.Android.keepScreenOn(false); } catch(e) {}
+        }
         if (wakeLockSentinel) {
             try {
                 await wakeLockSentinel.release();
